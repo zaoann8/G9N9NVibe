@@ -1,0 +1,118 @@
+name: Build & Release macOS DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号（留空则读取 VERSION 文件，例如 1.0.0）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-dmg:
+    name: Build Universal macOS DMG
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: meta
+        shell: zsh
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VER="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="$(cat VERSION | tr -d '[:space:]')"
+          fi
+          TAG="v${VER}"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          # 同步版本号与 GitHub 仓库地址至 VERSION 与 Info.plist（使打包后的 App 天然支持在线检查与一键自动更新）
+          echo "${VER}" > VERSION
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VER}" Packaging/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :G9NVibeGitHubRepo ${GITHUB_REPOSITORY}" Packaging/Info.plist
+          echo "Resolved version: ${VER} (tag: ${TAG}, repo: ${GITHUB_REPOSITORY})"
+
+      - name: Run automated self-tests (Protocol + 22 Core Cases)
+        shell: zsh
+        run: |
+          chmod +x Scripts/*.sh DriverSource/build-driver.sh
+          ./Scripts/run-self-tests.sh
+
+      - name: Build Universal App & Package DMG (Apple Silicon + Intel)
+        shell: zsh
+        env:
+          BUILD_UNIVERSAL: "1"
+        run: |
+          ./Scripts/build-dmg.sh
+          VER="${{ steps.meta.outputs.version }}"
+          DMG="dist/G9NVibe-${VER}.dmg"
+          ls -lh "$DMG"
+          lipo -info "dist/build/G9NVibe.app/Contents/MacOS/G9N9NVibe"
+          SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
+          echo "${SHA}  G9NVibe-${VER}.dmg" > "${DMG}.sha256"
+          echo "sha256=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "dmg_path=${DMG}" >> "$GITHUB_OUTPUT"
+        id: pkg
+
+      - name: Upload DMG build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: G9NVibe-${{ steps.meta.outputs.version }}-macOS-DMG
+          path: |
+            dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg
+            dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg.sha256
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: G9NVibe ${{ steps.meta.outputs.tag }}
+          files: |
+            dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg
+            dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg.sha256
+          body: |
+            ## G9NVibe ${{ steps.meta.outputs.tag }} (macOS Universal · Apple Silicon & Intel)
+
+            把 Google Chromecast (`G9N9N`) 语音遥控器变成 macOS 原生 **Vibe Coding 实体声控与快捷键控制器**。
+
+            ### 下载与校验
+            - **安装包**：`G9NVibe-${{ steps.meta.outputs.version }}.dmg`（单文件开包即用，内置纯 C 自研 MIT 虚拟声卡，支持 Apple Silicon M1–M4 与 Intel Mac）
+            - **SHA-256**：`${{ steps.pkg.outputs.sha256 }}`
+
+            ---
+
+            ### ⚠️ 首次打开说明（免费开源 Ad-Hoc 签名，无 Apple 开发者账号）
+
+            本项目为个人开源免费软件，当前采用 **Ad-Hoc 本地签名**（未购买 Apple $99/年开发者公证账号）。从 GitHub 下载 DMG 并拖入「应用程序」后，首次打开时 macOS Gatekeeper 会弹出 **「无法验证开发者」** 或 **「已损坏 / 无法打开」** 提示，属于正常现象，任选以下任意一种方式放行一次即可永久正常使用：
+
+            - **方式一（推荐 · 图形界面点一下）**：
+              1. 先尝试打开一次 `G9NVibe.app`，看到系统拦截弹窗后点「完成 / 取消」；
+              2. 打开 **系统设置 → 隐私与安全性**，滑到最底部安全区域，点击 **`仍要打开`** 并输入密码/触控 ID 确认即可。
+            - **方式二（终端一行命令，3 秒搞定）**：
+              将 `G9NVibe.app` 拖入「应用程序」文件夹后，在终端执行：
+              ```bash
+              xattr -cr /Applications/G9NVibe.app
+              ```
+              然后直接双击打开即可。
+
+            ---
+
+            ### 核心特性
+            - **系统麦永不常驻接管**：平时待机绝不亮橙色麦克风灯、不拖垮 AirPods 听歌音质；支持 **仅电脑麦 / 智能随动 / 仅遥控器麦 / 双麦合并** 与 **一键关闭双麦**。
+            - **遥控器真实电量与 3 档灵敏度**：原生读取 G9N9N 蓝牙电池服务（`0x180F`）电量；内置 **近场 +14dB / 标准 +20dB / 远场 +26dB** 三档实时 DSP 增益与软限幅。
+            - **15 键短按 + 8 键长按扩展**：36 项内置 Vibe Coding 与办公动作 + 任意原位录键；长按双功能与自动场景均拥有独立宽敞配置页。
+            - **随前台应用自动切换预设**：在 Cursor / VS Code / Antigravity / Xcode / 终端与浏览器 / 办公应用间自动无损切换独立键位档案。

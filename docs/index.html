@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>G9NVibe — macOS Native Hardware Controller for Vibe Coding</title>
+  <meta name="description" content="把 Google Chromecast (G9N9N) 语音遥控器变成 macOS 原生 Vibe Coding 实体声控与快捷键控制器。智能双麦随动、永不常驻接管系统麦、短按+长按双功能、随前台应用自动切预设。" />
+  <link rel="icon" type="image/png" href="./app-icon.png" />
+  <style>
+    :root {
+      --bg: #f4f3ee;
+      --bg-grid: rgba(22, 22, 21, 0.032);
+      --surface: #ffffff;
+      --surface-elev: #fbfaf7;
+      --surface-soft: #eae8e0;
+      --toolbar: rgba(249, 248, 244, 0.84);
+      --border: rgba(22, 22, 21, 0.085);
+      --border-med: rgba(22, 22, 21, 0.16);
+      --ink1: #151514;
+      --ink2: #58564f;
+      --ink3: #8c897f;
+      --brand: #e4461d;
+      --brand-soft: rgba(228, 70, 29, 0.09);
+      --brand-border: rgba(228, 70, 29, 0.30);
+      --green: #147e4f;
+      --green-soft: rgba(20, 126, 79, 0.095);
+      --green-border: rgba(20, 126, 79, 0.28);
+      --amber: #b87104;
+      --amber-soft: rgba(184, 113, 4, 0.10);
+      --amber-border: rgba(184, 113, 4, 0.34);
+      --shadow-sm: 0 1px 2px rgba(20, 20, 18, 0.04), 0 8px 24px rgba(20, 20, 18, 0.045);
+      --shadow-panel: 0 1px 2px rgba(20, 20, 18, 0.06), 0 22px 48px -12px rgba(20, 20, 18, 0.12);
+      --font-sans: "Avenir Next", "Hiragino Sans GB", -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, "Hiragino Sans GB", monospace;
+    }
+
+    html[data-theme="dark"] {
+      --bg: #141413;
+      --bg-grid: rgba(245, 244, 239, 0.035);
+      --surface: #1c1c1a;
+      --surface-elev: #21211f;
+      --surface-soft: #151513;
+      --toolbar: rgba(24, 24, 22, 0.84);
+      --border: rgba(245, 244, 239, 0.085);
+      --border-med: rgba(245, 244, 239, 0.17);
+      --ink1: #f3f2ed;
+      --ink2: #9d9a90;
+      --ink3: #6a675f;
+      --brand: #ff5b32;
+      --brand-soft: rgba(255, 91, 50, 0.15);
+      --brand-border: rgba(255, 91, 50, 0.40);
+      --green: #2cc47c;
+      --green-soft: rgba(44, 196, 124, 0.14);
+      --green-border: rgba(44, 196, 124, 0.34);
+      --amber: #e29d22;
+      --amber-soft: rgba(226, 157, 34, 0.14);
+      --amber-border: rgba(226, 157, 34, 0.38);
+      --shadow-sm: 0 2px 14px rgba(0, 0, 0, 0.28);
+      --shadow-panel: 0 24px 56px rgba(0, 0, 0, 0.54);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(ellipse 75% 420px at 50% -60px, rgba(228, 70, 29, 0.06), transparent 70%),
+        linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
+      background-size: 100% 100%, 28px 28px, 28px 28px;
+      color: var(--ink1);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+    svg { display: block; }
+
+    html[data-lang="zh"] .en { display: none !important; }
+    html[data-lang="en"] .zh { display: none !important; }
+
+    /* 紧凑精致居中容器（980px 黄金阅读与展示宽度） */
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* 顶栏：macOS 精工玻璃导航 */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      background: var(--toolbar);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 20px;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.15px;
+    }
+    .brand img {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+    }
+    .brand-ver {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink3);
+      padding: 1.5px 6px;
+      border-radius: 5px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink2);
+    }
+    .nav-links a { transition: color 0.14s ease; }
+    .nav-links a:hover { color: var(--ink1); }
+    .nav-tools {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .icon-btn {
+      height: 29px;
+      min-width: 30px;
+      padding: 0 9px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink2);
+      font-size: 11.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.14s ease;
+    }
+    .icon-btn:hover { color: var(--ink1); border-color: var(--border-med); }
+    .nav-dl {
+      height: 29px;
+      padding: 0 12px;
+      border-radius: 7px;
+      background: var(--ink1);
+      color: var(--surface);
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.14s ease;
+    }
+    .nav-dl:hover { opacity: 0.86; }
+
+    /* 首屏 Hero：紧实有力，一屏尽览产品价值与互动硬件台 */
+    .hero {
+      padding: 36px 0 24px;
+      display: grid;
+      grid-template-columns: 1.06fr 0.94fr;
+      gap: 28px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border-med);
+      color: var(--ink2);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .eyebrow .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px var(--green-soft);
+    }
+    .hero h1 {
+      font-size: clamp(28px, 3.6vw, 40px);
+      line-height: 1.15;
+      font-weight: 600;
+      letter-spacing: -0.024em;
+      margin-bottom: 13px;
+    }
+    .hero h1 .accent { color: var(--brand); }
+    .hero-desc {
+      font-size: 14.5px;
+      color: var(--ink2);
+      max-width: 470px;
+      margin-bottom: 20px;
+    }
+    .hero-desc code {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--surface-soft);
+      color: var(--ink1);
+    }
+    .hero-cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .btn-primary {
+      height: 41px;
+      padding: 0 20px;
+      border-radius: 9px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px -4px rgba(228, 70, 29, 0.36);
+      transition: transform 0.14s ease, opacity 0.14s ease;
+    }
+    .btn-primary:hover { transform: translateY(-1px); opacity: 0.94; }
+    .btn-secondary {
+      height: 41px;
+      padding: 0 16px;
+      border-radius: 9px;
+      background: var(--surface);
+      border: 1px solid var(--border-med);
+      color: var(--ink1);
+      font-size: 13.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: background 0.14s ease;
+    }
+    .btn-secondary:hover { background: var(--surface-soft); }
+    .hero-note {
+      font-size: 12px;
+      color: var(--ink3);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .hero-note svg { color: var(--amber); flex-shrink: 0; }
+    .hero-note a {
+      color: var(--ink1);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-med);
+    }
+    .hero-note a:hover { color: var(--brand); border-color: var(--brand); }
+
+    /* 首屏右侧：真实 macOS 硬件台窗口切片 */
+    .console-window {
+      background: var(--surface);
+      border: 1px solid var(--border-med);
+      border-radius: 16px;
+      box-shadow: var(--shadow-panel);
+      overflow: hidden;
+    }
+    .console-bar {
+      height: 36px;
+      padding: 0 14px;
+      background: var(--surface-elev);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .traffic-lights {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tl {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+    .tl.r { background: #ff5f57; }
+    .tl.y { background: #febc2e; }
+    .tl.g { background: #28c840; }
+    .console-title {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink3);
+      letter-spacing: 0.02em;
+    }
+    .bat-chip {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--green);
+      background: var(--green-soft);
+      border: 1px solid var(--green-border);
+      padding: 2.5px 8px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.18s ease;
+    }
+    .bat-chip:hover { filter: brightness(0.96); }
+    .bat-chip.low {
+      color: var(--amber);
+      background: var(--amber-soft);
+      border-color: var(--amber-border);
+    }
+    .bat-chip.offline {
+      color: var(--ink3);
+      background: var(--surface-soft);
+      border-color: var(--border-med);
+    }
+    .bat-icon {
+      width: 18px;
+      height: 10px;
+      border: 1.3px solid currentColor;
+      border-radius: 2.5px;
+      padding: 1.4px;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .bat-icon::after {
+      content: "";
+      position: absolute;
+      right: -3px;
+      top: 2px;
+      width: 1.8px;
+      height: 3.6px;
+      border-radius: 0 1px 1px 0;
+      background: currentColor;
+    }
+    .bat-fill {
+      height: 100%;
+      border-radius: 1px;
+      background: currentColor;
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .console-body {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 156px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .remote-wrap {
+      display: flex;
+      justify-content: center;
+    }
+    .remote-svg {
+      width: 148px;
+      height: auto;
+      filter: drop-shadow(0 14px 22px rgba(22, 22, 21, 0.16));
+      user-select: none;
+    }
+    .r-key { cursor: pointer; transition: opacity 0.14s ease; }
+    .r-key:hover { opacity: 0.88; }
+    .r-key.active .r-fill { fill: var(--brand) !important; stroke: var(--brand) !important; }
+    .r-key.active .r-fg { fill: #ffffff !important; stroke: #ffffff !important; }
+    .r-key.active .r-text { fill: #ffffff !important; }
+    .r-sector { cursor: pointer; transition: fill 0.14s ease; }
+    .r-sector:hover { fill: rgba(228, 70, 29, 0.16); }
+    .r-sector.active { fill: rgba(228, 70, 29, 0.34); }
+    .led-glow {
+      animation: breathe 2.4s ease-in-out infinite;
+      transform-origin: 90px 406px;
+    }
+    .led-glow.pulse {
+      animation: none;
+      opacity: 1 !important;
+      transform: scale(1.48);
+    }
+    @keyframes breathe {
+      0%, 100% { opacity: 0.32; transform: scale(0.95); }
+      50% { opacity: 0.82; transform: scale(1.1); }
+    }
+
+    .inspector {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .inspector-box {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 12px;
+    }
+    .key-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+    .key-head-l {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .key-badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--brand);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .key-name { font-size: 14px; font-weight: 600; }
+    .key-proto {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink3);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 1.5px 6px;
+      border-radius: 5px;
+    }
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 9px;
+      border-radius: 7px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    .action-tag { font-size: 10.5px; color: var(--ink3); font-weight: 600; }
+    .action-val { font-weight: 600; color: var(--ink1); }
+    .action-val.brand { color: var(--brand); }
+    .meter-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 9px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink3);
+    }
+    .meter-bars {
+      display: grid;
+      grid-template-columns: repeat(24, 1fr);
+      gap: 2px;
+      margin-top: 4px;
+      height: 10px;
+    }
+    .meter-bar {
+      border-radius: 1.5px;
+      background: var(--border-med);
+      opacity: 0.45;
+      transition: background 0.08s ease, opacity 0.08s ease;
+    }
+    .meter-bar.lit { opacity: 1; }
+    .inspector-hint {
+      font-size: 11px;
+      color: var(--ink3);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* 紧凑硬件指标横带（Spec Strip） */
+    .spec-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      margin: 6px 0 18px;
+    }
+    .spec-cell {
+      padding: 13px 16px;
+      border-right: 1px solid var(--border);
+    }
+    .spec-cell:last-child { border-right: none; }
+    .spec-num {
+      font-family: var(--font-mono);
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink1);
+      line-height: 1.25;
+    }
+    .spec-lbl {
+      font-size: 11.5px;
+      color: var(--ink3);
+      margin-top: 2px;
+    }
+
+    /* 紧凑区块节奏 */
+    section { padding: 24px 0; }
+    .sec-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .sec-kicker {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--brand);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 3px;
+    }
+    .sec-title {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+    .sec-sub {
+      color: var(--ink2);
+      font-size: 13px;
+      max-width: 440px;
+    }
+
+    /* 四大核心工作区（Bento 紧凑精工网格） */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .feat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.16s ease;
+    }
+    .feat-card:hover { border-color: var(--border-med); }
+    .feat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .feat-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid transparent;
+    }
+    .feat-icon.brand { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-border); }
+    .feat-icon.green { background: var(--green-soft); color: var(--green); border-color: var(--green-border); }
+    .feat-idx {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink3);
+    }
+    .feat-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 5px; }
+    .feat-card p { font-size: 13px; color: var(--ink2); line-height: 1.56; }
+    .feat-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .feat-tag {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: var(--surface-soft);
+      color: var(--ink2);
+    }
+
+    /* 首次打开安全说明（克制高级工业风） */
+    .gatekeeper-box {
+      background: var(--surface);
+      border: 1px solid var(--border-med);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      overflow: hidden;
+    }
+    .gatekeeper-box::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 3.5px;
+      background: var(--amber);
+    }
+    .gk-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .gk-banner {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      background: var(--amber-soft);
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .gatekeeper-box h2 {
+      font-size: 17.5px;
+      font-weight: 600;
+    }
+    .gk-lead {
+      font-size: 13px;
+      color: var(--ink2);
+      margin-bottom: 14px;
+    }
+    .gk-methods {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .gk-card {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 14px 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gk-card-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .gk-step-num {
+      width: 19px;
+      height: 19px;
+      border-radius: 5px;
+      background: var(--ink1);
+      color: var(--surface);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gk-card ol {
+      padding-left: 17px;
+      font-size: 12.5px;
+      color: var(--ink2);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .gk-card strong { color: var(--ink1); }
+    .cmd-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border-med);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink1);
+    }
+    .cmd-bar code { overflow-x: auto; white-space: nowrap; }
+    .copy-btn {
+      flex-shrink: 0;
+      height: 25px;
+      padding: 0 9px;
+      border-radius: 6px;
+      border: 1px solid var(--brand-border);
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.14s ease;
+    }
+    .copy-btn.copied {
+      border-color: var(--green-border);
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    /* 3 步快速上手 + 硬件兼容双列紧致收尾 */
+    .steps-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .step-badge {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--brand);
+      letter-spacing: 0.06em;
+      margin-bottom: 7px;
+      display: block;
+    }
+    .step-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .step-card p { font-size: 12.5px; color: var(--ink2); }
+
+    /* 硬件兼容表 */
+    .compat-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .compat-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .compat-table th, .compat-table td {
+      padding: 11px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .compat-table th {
+      background: var(--surface-elev);
+      color: var(--ink3);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .compat-table tr:last-child td { border-bottom: none; }
+    .ok-tag {
+      color: var(--green);
+      background: var(--green-soft);
+      border: 1px solid var(--green-border);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .warn-tag {
+      color: var(--amber);
+      background: var(--amber-soft);
+      border: 1px solid var(--amber-border);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* 页脚 */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px 0 28px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--ink3);
+    }
+    .foot-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .foot-links { display: flex; gap: 16px; }
+    .foot-links a:hover { color: var(--ink1); }
+
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; padding: 24px 0 18px; }
+      .console-body { grid-template-columns: 1fr; }
+      .spec-strip { grid-template-columns: repeat(2, 1fr); }
+      .spec-cell:nth-child(2) { border-right: none; }
+      .spec-cell:nth-child(1), .spec-cell:nth-child(2) { border-bottom: 1px solid var(--border); }
+      .grid-2, .gk-methods, .steps-3 { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a href="#" class="brand">
+        <img src="./app-icon.png" alt="G9NVibe" onerror="this.style.display='none'" />
+        <span>G9NVibe</span>
+        <span class="brand-ver">v1.0.0</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features"><span class="zh">架构特性</span><span class="en">Architecture</span></a>
+        <a href="#first-open"><span class="zh">首次打开</span><span class="en">First Launch</span></a>
+        <a href="#setup"><span class="zh">快速上手</span><span class="en">Setup</span></a>
+        <a href="#hardware"><span class="zh">硬件兼容</span><span class="en">Hardware</span></a>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn" id="langBtn" title="Switch Language">EN</button>
+        <button class="icon-btn" id="themeBtn" title="Toggle Theme" aria-label="Toggle Theme">
+          <svg id="themeIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a class="nav-dl js-dl-link" href="https://github.com/zaoann8/G9N9NVibe/releases/latest" target="_blank" rel="noopener">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 2.2v8.2m0 0L4.8 7.2M8 10.4l3.2-3.2M2.5 13.3h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="zh">下载 DMG</span>
+          <span class="en">Download</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 首屏 Hero + macOS 硬件交互切片 -->
+    <section class="hero">
+      <div>
+        <div class="eyebrow">
+          <span class="dot"></span>
+          <span class="zh">macOS 12+ 原生 Swift · 纯 C CoreAudio 驱动 · MIT 开源</span>
+          <span class="en">Native macOS Swift · Pure C CoreAudio Driver · MIT</span>
+        </div>
+        <h1>
+          <span class="zh">将 Chromecast 遥控器，<br/>重塑为 <span class="accent">Vibe Coding</span> 实体控制器</span>
+          <span class="en">Chromecast Remote,<br/>Rebuilt for <span class="accent">Vibe Coding</span></span>
+        </h1>
+        <p class="hero-desc">
+          <span class="zh">专为 Google Chromecast (<code>G9N9N</code>) 设计的 macOS 原生硬件桥接器。支持智能双麦按源随动、3 档实时 DSP 灵敏度、15 键短按与 8 键长按扩展，以及按前台 IDE 自动切换预设——待机零橙灯、永不常驻接管系统默认麦。</span>
+          <span class="en">A precision macOS bridge for the Google Chromecast (<code>G9N9N</code>) remote. Smart dual-mic routing, 3-step DSP gain, 15 tap + 8 hold bindings, and zero-polling per-app profile switching—without hijacking your system mic.</span>
+        </p>
+
+        <div class="hero-cta">
+          <a class="btn-primary js-dl-link" href="https://github.com/zaoann8/G9N9NVibe/releases/latest" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2.2v8.2m0 0L4.8 7.2M8 10.4l3.2-3.2M2.5 13.3h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="zh">免费下载 macOS DMG</span>
+            <span class="en">Download macOS DMG</span>
+          </a>
+          <a class="btn-secondary js-repo-link" href="https://github.com/zaoann8/G9N9NVibe" target="_blank" rel="noopener">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.85.09-.66.35-1.12.63-1.38-2.22-.26-4.55-1.14-4.55-5.08 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.72 0 0 .84-.28 2.75 1.05A9.38 9.38 0 0 1 12 6.84c.85 0 1.7.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.42.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.95-2.34 4.82-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.59.69.49A10.25 10.25 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"/></svg>
+            <span class="zh">GitHub 源码</span>
+            <span class="en">Source Code</span>
+          </a>
+        </div>
+
+        <div class="hero-note">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="zh">免费开源 Ad-Hoc 签名，首次打开若提示「无法验证开发者」请见</span>
+          <span class="en">Free Ad-Hoc signed build. If Gatekeeper prompts on first run, see</span>
+          <a href="#first-open"><span class="zh">3 秒放行指南</span><span class="en">3-second guide</span></a>
+        </div>
+      </div>
+
+      <!-- 真实 macOS 控制台交互窗口切片 -->
+      <div class="console-window">
+        <div class="console-bar">
+          <div class="traffic-lights">
+            <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          </div>
+          <span class="console-title">G9N9N · 18D1:9450</span>
+          <button type="button" class="bat-chip" id="batChip" title="点击切换演示蓝牙电量态 / Click to cycle BLE battery states">
+            <span class="bat-icon"><span class="bat-fill" id="batFill" style="width:92%"></span></span>
+            <span id="batText">电量 92%</span>
+          </button>
+        </div>
+
+        <div class="console-body">
+          <div class="remote-wrap">
+            <svg class="remote-svg" viewBox="0 0 180 460" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fcfcfa"/>
+                  <stop offset="55%" stop-color="#f4f4f1"/>
+                  <stop offset="100%" stop-color="#e7e6e0"/>
+                </linearGradient>
+                <radialGradient id="ledHalo" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#ffffff" stop-opacity="0.98"/>
+                  <stop offset="55%" stop-color="#d8ebff" stop-opacity="0.45"/>
+                  <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <g class="r-key" data-key="0C"><rect class="r-fill" x="155" y="106" width="7" height="35" rx="3" fill="#eae9e4" stroke="#b8b6ae"/></g>
+              <g class="r-key" data-key="0D"><rect class="r-fill" x="155" y="145" width="7" height="35" rx="3" fill="#eae9e4" stroke="#b8b6ae"/></g>
+              <rect x="22" y="12" width="136" height="436" rx="68" fill="url(#bodyGrad)" stroke="#cfcec7" stroke-width="1.2"/>
+              <circle cx="90" cy="80" r="60" fill="#fafaf8" stroke="#7d7d7a" stroke-width="1"/>
+              <path class="r-sector" data-key="03" d="M 47.6 37.6 A 60 60 0 0 1 132.4 37.6 L 105.9 64.1 A 22.5 22.5 0 0 0 74.1 64.1 Z" fill="transparent"/>
+              <path class="r-sector" data-key="06" d="M 132.4 37.6 A 60 60 0 0 1 132.4 122.4 L 105.9 95.9 A 22.5 22.5 0 0 0 105.9 64.1 Z" fill="transparent"/>
+              <path class="r-sector" data-key="04" d="M 132.4 122.4 A 60 60 0 0 1 47.6 122.4 L 74.1 95.9 A 22.5 22.5 0 0 0 105.9 95.9 Z" fill="transparent"/>
+              <path class="r-sector" data-key="05" d="M 47.6 122.4 A 60 60 0 0 1 47.6 37.6 L 74.1 64.1 A 22.5 22.5 0 0 0 74.1 95.9 Z" fill="transparent"/>
+              <g class="r-key active" data-key="07"><circle class="r-fill" cx="90" cy="80" r="22.5" fill="#ffffff" stroke="#757572" stroke-width="1"/></g>
+              <g class="r-key" data-key="0B">
+                <circle class="r-fill" cx="58" cy="171" r="22" fill="#f7f7f4" stroke="#858581" stroke-width="1"/>
+                <path class="r-fg" d="M65 171H51M56 165.5L50.5 171L56 176.5" fill="none" stroke="#181818" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </g>
+              <g class="r-key" data-key="voice">
+                <circle class="r-fill" cx="122" cy="171" r="22" fill="#141414" stroke="#141414"/>
+                <circle cx="116" cy="171" r="4.6" fill="#fff"/>
+                <circle cx="125" cy="166.5" r="2.2" fill="#fff"/>
+                <circle cx="125" cy="175.5" r="3" fill="#fff"/>
+                <circle cx="131" cy="170" r="1.4" fill="#fff"/>
+              </g>
+              <g class="r-key" data-key="0A">
+                <circle class="r-fill" cx="58" cy="227" r="22" fill="#f7f7f4" stroke="#858581" stroke-width="1"/>
+                <path class="r-fg" d="M58 219.5L50.5 226H52.8V233.5H56.5V229H59.5V233.5H63.2V226H65.5Z" fill="#181818"/>
+              </g>
+              <g class="r-key" data-key="08">
+                <circle class="r-fill" cx="122" cy="227" r="22" fill="#f7f7f4" stroke="#858581" stroke-width="1"/>
+                <path class="r-fg" d="M113 224.2H116.3L120.5 220.6V233.4L116.3 229.8H113Z" fill="#181818"/>
+                <path class="r-fg" d="M124.5 224L130 229.5M130 224L124.5 229.5" stroke="#181818" stroke-width="2" stroke-linecap="round"/>
+              </g>
+              <g class="r-key" data-key="0E">
+                <circle class="r-fill" cx="58" cy="283" r="22" fill="#f7f7f4" stroke="#858581" stroke-width="1"/>
+                <text class="r-text" x="58" y="286.5" text-anchor="middle" font-size="9.5" font-weight="800" fill="#181818">YouTube</text>
+              </g>
+              <g class="r-key" data-key="0F">
+                <circle class="r-fill" cx="122" cy="283" r="22" fill="#f7f7f4" stroke="#858581" stroke-width="1"/>
+                <text class="r-text" x="122" y="286.5" text-anchor="middle" font-size="8.6" font-weight="800" fill="#181818">NETFLIX</text>
+              </g>
+              <rect x="42" y="321" width="96" height="32" rx="16" fill="#ecebe6" stroke="#d6d5ce"/>
+              <g class="r-key" data-key="01">
+                <circle class="r-fill" cx="58" cy="337" r="12.5" fill="#f7f7f4" stroke="#858581"/>
+                <path class="r-fg" d="M58 332.5V336.5M54.8 334.6A4.5 4.5 0 1 0 61.2 334.6" fill="none" stroke="#181818" stroke-width="1.6" stroke-linecap="round"/>
+              </g>
+              <rect id="micLed" x="85.8" y="335.4" width="8.4" height="3.2" rx="1.6" fill="#363636"/>
+              <g class="r-key" data-key="11">
+                <circle class="r-fill" cx="122" cy="337" r="12.5" fill="#f7f7f4" stroke="#858581"/>
+                <path class="r-fg" d="M119.5 333.5H125.5V340.5H119.5M117.5 337H123M121 335L123 337L121 339" fill="none" stroke="#181818" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </g>
+              <circle id="whiteLedGlow" class="led-glow" cx="90" cy="406" r="16" fill="url(#ledHalo)"/>
+              <circle cx="90" cy="406" r="3.6" fill="#cccac3"/>
+              <circle cx="90" cy="406" r="2.5" fill="#ffffff"/>
+            </svg>
+          </div>
+
+          <div class="inspector">
+            <div class="inspector-box">
+              <div class="key-head">
+                <div class="key-head-l">
+                  <span class="key-badge" id="pvBadge">OK</span>
+                  <span class="key-name" id="pvName">确认键</span>
+                </div>
+                <span class="key-proto" id="pvProto">HID 0x07</span>
+              </div>
+              <div class="action-row">
+                <span class="action-tag"><span class="zh">短按 · 0ms</span><span class="en">Tap · 0ms</span></span>
+                <span class="action-val" id="pvShort">回车发送 (↩)</span>
+              </div>
+              <div class="action-row">
+                <span class="action-tag"><span class="zh">长按 · 0.38s</span><span class="en">Hold · 0.38s</span></span>
+                <span class="action-val brand" id="pvHold">换行不发送 (⇧↩)</span>
+              </div>
+              <div class="meter-head">
+                <span id="pvBus"><span class="zh">ATVV 16kHz 音频轨</span><span class="en">ATVV 16kHz Audio</span></span>
+                <span id="pvDb">-∞ dB</span>
+              </div>
+              <div class="meter-bars" id="demoMeter"></div>
+            </div>
+
+            <div class="inspector-hint">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <span class="zh">点击遥控器任意键帽或右上角电量胶囊交互预览</span>
+              <span class="en">Click any keycap or the battery pill above to preview</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 紧凑硬件级指标带 -->
+    <div class="spec-strip">
+      <div class="spec-cell">
+        <div class="spec-num">2.0 MB</div>
+        <div class="spec-lbl"><span class="zh">Universal 双架构单包体积</span><span class="en">Universal DMG Footprint</span></div>
+      </div>
+      <div class="spec-cell">
+        <div class="spec-num">48 kHz</div>
+        <div class="spec-lbl"><span class="zh">纯 C 零堆分配 CoreAudio 驱动</span><span class="en">Zero-Alloc C HAL Driver</span></div>
+      </div>
+      <div class="spec-cell">
+        <div class="spec-num">0 ms</div>
+        <div class="spec-lbl"><span class="zh">默认按下瞬发 · 0.38s 长按扩展</span><span class="en">Instant Tap · 0.38s Hold</span></div>
+      </div>
+      <div class="spec-cell">
+        <div class="spec-num">0% Idle</div>
+        <div class="spec-lbl"><span class="zh">按需采麦 · 待机零常亮橙灯</span><span class="en">On-Demand Mic · No Constant Dot</span></div>
+      </div>
+    </div>
+
+    <!-- 四大核心工作区 -->
+    <section id="features">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">ARCHITECTURE</div>
+          <h2 class="sec-title"><span class="zh">四大独立工作区，精工而不臃肿</span><span class="en">Four Focused Workspaces</span></h2>
+        </div>
+        <p class="sec-sub"><span class="zh">100% 原生 Swift 与纯 C 架构，关窗即释放视图树，极低后台常驻占用。</span><span class="en">100% native Swift &amp; pure C. Releases the SwiftUI tree on window close for minimal RAM.</span></p>
+      </div>
+
+      <div class="grid-2">
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </div>
+              <span class="feat-idx">01 / AUDIO</span>
+            </div>
+            <h3><span class="zh">智能随动双麦 · 系统麦永不常驻接管</span><span class="en">Smart Dual-Mic · Zero System Hijack</span></h3>
+            <p><span class="zh">提供仅电脑麦、智能随动、仅遥控器麦、双麦合并与一键关闭双麦。按键盘走电脑麦、按遥控器走遥控器麦；内置近场 +14dB / 标准 +20dB / 远场 +26dB 三档实时 DSP 增益与 0x180F 蓝牙硬件真实电量。</span><span class="en">4 routing modes plus Mute All. Keyboard uses Mac mic, remote uses remote mic. Features 3-step live DSP gain (+14/+20/+26 dB) with soft limiting and hardware BLE 0x180F battery readout.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">Pure C MIT Driver</span>
+            <span class="feat-tag">USB Transport Bypass</span>
+            <span class="feat-tag">BLE 0x180F Battery</span>
+          </div>
+        </div>
+
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon brand">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+              </div>
+              <span class="feat-idx">02 / KEY MAP</span>
+            </div>
+            <h3><span class="zh">15 键全自定义 · 36 项编码动作库</span><span class="en">15 Keys · 36 Frontmost Actions</span></h3>
+            <p><span class="zh">兼容豆包、微信输入法与系统听写。内置回车、换行 (⇧↩)、AI 行内编辑 (⌘K)、AI 对话 (⌘L)、接受代码 (⌘↩)、切换终端、区域截图等 36 项零冲突前台快捷键，任意键支持原位录制与二次确认。</span><span class="en">Supports Doubao, WeType, and macOS Dictation. Includes 36 zero-conflict frontmost shortcuts (Return, ⇧↩, ⌘K, ⌘L, ⌘↩, Terminal, Capture) plus inline recording with confirmation.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">36 Built-in Actions</span>
+            <span class="feat-tag">Inline Key Recorder</span>
+            <span class="feat-tag">Zero Hotkey Conflicts</span>
+          </div>
+        </div>
+
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon brand">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+              </div>
+              <span class="feat-idx">03 / HOLD KEYS</span>
+            </div>
+            <h3><span class="zh">独立「长按扩展」双功能工作区</span><span class="en">Dedicated Hold-Keys Workspace</span></h3>
+            <p><span class="zh">8 枚功能键拥有独立 2 列大卡片配置页，按住 0.38 秒触发第二功能（如确认键短按发送 / 长按换行，静音键短按撤销 / 长按重做）。未设长按的按键与方向/音量键保持 0ms 按下瞬发。</span><span class="en">Dedicated 2-column grid for 8 dual-action function keys (0.38s hold). Unconfigured buttons and D-Pad/Volume keys retain instant 0ms trigger latency.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">8 Function Keys</span>
+            <span class="feat-tag">0ms Instant Fallback</span>
+            <span class="feat-tag">Per-Preset Storage</span>
+          </div>
+        </div>
+
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+              </div>
+              <span class="feat-idx">04 / AUTO APP</span>
+            </div>
+            <h3><span class="zh">独立「自动场景」按前台应用切预设</span><span class="en">App-Aware Automatic Profiles</span></h3>
+            <p><span class="zh">订阅 macOS 原生前台切换通知（零轮询零耗电）：切入 Cursor / VS Code / Antigravity / Xcode / JetBrains / 终端自动激活 Vibe Coding 预设；切去浏览器或媒体应用自动恢复办公键位，支持一键添加运行中应用。</span><span class="en">Native workspace notifications switch to Vibe Coding in IDEs/Terminals and Office/Media elsewhere. Add any running app in one click; both profiles save independently.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">Cursor / VS Code / Xcode</span>
+            <span class="feat-tag">Custom App Rules</span>
+            <span class="feat-tag">Zero Polling</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 首次打开安全放行指南（Ad-Hoc 签名透明说明） -->
+    <section id="first-open">
+      <div class="gatekeeper-box">
+        <div class="gk-header">
+          <h2>
+            <span class="zh">首次打开说明：免费开源 Ad-Hoc 签名放行</span>
+            <span class="en">First Launch: Free Open-Source Ad-Hoc Signature</span>
+          </h2>
+          <span class="gk-banner">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="zh">无需开发者账号 · 放行一次永久有效</span>
+            <span class="en">One-time Gatekeeper approval</span>
+          </span>
+        </div>
+        <p class="gk-lead">
+          <span class="zh">本项目为免费开源软件，采用 <strong>Ad-Hoc 本地签名</strong>（未购买 Apple $99/年开发者公证账号）。从 GitHub 下载 DMG 并拖入「应用程序」后，首次启动时 macOS Gatekeeper 会提示「无法验证开发者」。任选以下任意一种方式放行一次即可永久正常使用（覆盖更新保留全部系统权限）：</span>
+          <span class="en">G9NVibe is free open-source software built with an <strong>Ad-Hoc signature</strong> (no paid $99/yr Apple Developer account). macOS Gatekeeper will prompt once after downloading from GitHub. Approve once using either method below:</span>
+        </p>
+
+        <div class="gk-methods">
+          <div class="gk-card">
+            <div class="gk-card-title">
+              <span class="gk-step-num">1</span>
+              <span class="zh">图形界面点一下（推荐 · 无需终端）</span>
+              <span class="en">System Settings Click (Recommended)</span>
+            </div>
+            <ol>
+              <li><span class="zh">将 <strong>G9NVibe.app</strong> 拖入「应用程序」并双击尝试打开一次，拦截弹窗点「完成 / 取消」；</span><span class="en">Move <strong>G9NVibe.app</strong> to Applications, launch it once, and dismiss the dialog.</span></li>
+              <li><span class="zh">打开 <strong>系统设置 → 隐私与安全性</strong>，滑至底部「安全性」区域；</span><span class="en">Open <strong>System Settings → Privacy &amp; Security</strong> and scroll to Security.</span></li>
+              <li><span class="zh">点击 G9NVibe 右侧的 <strong>「仍要打开」</strong> 并通过触控 ID / 密码确认。</span><span class="en">Click <strong>Open Anyway</strong> and confirm with Touch ID or password.</span></li>
+            </ol>
+          </div>
+
+          <div class="gk-card">
+            <div class="gk-card-title">
+              <span class="gk-step-num">2</span>
+              <span class="zh">终端一行放行（3 秒清除隔离标记）</span>
+              <span class="en">One-Line Terminal Command (3 Seconds)</span>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink2)">
+              <span class="zh">拖入「应用程序」后，在终端执行下方命令移除浏览器下载附带的 quarantine 标记，随后直接双击运行：</span>
+              <span class="en">After moving to Applications, clear the download quarantine attribute and launch directly:</span>
+            </p>
+            <div class="cmd-bar">
+              <code id="xattrCmd">xattr -cr /Applications/G9NVibe.app</code>
+              <button class="copy-btn" id="copyCmdBtn"><span class="zh">复制命令</span><span class="en">Copy</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 步上手 -->
+    <section id="setup">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">QUICK START</div>
+          <h2 class="sec-title"><span class="zh">3 步完成配置</span><span class="en">3-Step Setup</span></h2>
+        </div>
+      </div>
+      <div class="steps-3">
+        <div class="step-card">
+          <span class="step-badge">STEP 01</span>
+          <h3><span class="zh">配对蓝牙遥控器</span><span class="en">Pair G9N9N via Bluetooth</span></h3>
+          <p><span class="zh">同时长按「返回 + Home」3 秒至白灯闪烁，在 macOS 系统蓝牙设置完成配对。</span><span class="en">Hold Back + Home for 3s until the white LED blinks, then pair in macOS Bluetooth.</span></p>
+        </div>
+        <div class="step-card">
+          <span class="step-badge">STEP 02</span>
+          <h3><span class="zh">选定语音工具与权限</span><span class="en">Select IME &amp; Permissions</span></h3>
+          <p><span class="zh">在首次引导中选择豆包、微信输入法或系统听写，并放行麦克风、辅助功能与输入监控。</span><span class="en">Pick Doubao, WeType, or Dictation and grant Mic, Accessibility, and Input Monitoring.</span></p>
+        </div>
+        <div class="step-card">
+          <span class="step-badge">STEP 03</span>
+          <h3><span class="zh">按需启用遥控器声卡</span><span class="en">Optional Remote Audio Driver</span></h3>
+          <p><span class="zh">仅用电脑麦开箱即用；需近场使用遥控器麦时点击「一键启用」1 秒部署内置驱动，随时可无痕卸载。</span><span class="en">Use your Mac mic immediately, or click Enable once to install the built-in MIT driver in 1s.</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 硬件兼容表 -->
+    <section id="hardware">
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">COMPATIBILITY</div>
+          <h2 class="sec-title"><span class="zh">硬件兼容与系统边界</span><span class="en">Hardware &amp; OS Matrix</span></h2>
+        </div>
+      </div>
+      <div class="compat-wrap">
+        <table class="compat-table">
+          <thead>
+            <tr>
+              <th><span class="zh">设备 / 系统</span><span class="en">Device / OS</span></th>
+              <th><span class="zh">支持状态</span><span class="en">Status</span></th>
+              <th><span class="zh">技术说明</span><span class="en">Technical Notes</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong><span class="zh">兼容版 G9N9N 遥控器</span><span class="en">Compatible G9N9N Remote</span></strong> <span style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink3)">18D1:9450</span></td>
+              <td><span class="ok-tag"><span class="zh">全 15 键 + 语音完整支持</span><span class="en">Full 15 Keys + Voice</span></span></td>
+              <td><span class="zh">BLE ATVV 语音、0x180F 真实电量与 14 枚 HID 按键短/长按全部可用。</span><span class="en">BLE ATVV voice, 0x180F battery level, and all 14 HID keys fully supported.</span></td>
+            </tr>
+            <tr>
+              <td><strong><span class="zh">Google 原装正版 G9N9N</span><span class="en">Original Google G9N9N</span></strong></td>
+              <td><span class="warn-tag"><span class="zh">仅支持黑色语音键</span><span class="en">Voice Key Only</span></span></td>
+              <td><span class="zh">受原厂固件限制，直连 macOS 时仅广播 BLE 语音键，其余 14 键不上报 HID。</span><span class="en">Stock firmware only broadcasts BLE ATVV voice on macOS; other 14 HID keys are suppressed.</span></td>
+            </tr>
+            <tr>
+              <td><strong>macOS 12.0 – 15+</strong></td>
+              <td><span class="ok-tag">Universal · arm64 &amp; x86_64</span></td>
+              <td><span class="zh">macOS 14.2+ 启用精准 CoreAudio 进程录音探测；12–14.1 自动降级兼容模式。</span><span class="en">macOS 14.2+ uses exact CoreAudio process detection; 12–14.1 falls back automatically.</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container foot-inner">
+      <div>G9NVibe · MIT License · <span class="zh">纯原生 Swift &amp; C CoreAudio 架构</span><span class="en">Native Swift &amp; Pure C CoreAudio</span></div>
+      <div class="foot-links">
+        <a class="js-repo-link" href="https://github.com/zaoann8/G9N9NVibe" target="_blank" rel="noopener">GitHub</a>
+        <a class="js-dl-link" href="https://github.com/zaoann8/G9N9NVibe/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="#first-open"><span class="zh">首次打开说明</span><span class="en">Gatekeeper Guide</span></a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // 正式仓库地址：自动拉取最新 Release 版本与 .dmg 直链下载（API 限流时自动兜底跳转 Releases 页）
+    const MANUAL_GITHUB_REPO = "zaoann8/G9N9NVibe";
+
+    (async function resolveRepoLinks() {
+      let repo = MANUAL_GITHUB_REPO.trim();
+      if (!repo && window.location.hostname.endsWith(".github.io")) {
+        const owner = window.location.hostname.replace(/\.github\.io$/, "");
+        const segs = window.location.pathname.split("/").filter(Boolean);
+        if (owner && segs.length > 0) repo = owner + "/" + segs[0];
+      }
+      if (!repo) return;
+
+      const repoUrl = "https://github.com/" + repo;
+      const latestPageUrl = repoUrl + "/releases/latest";
+
+      document.querySelectorAll(".js-repo-link").forEach(a => { a.href = repoUrl; });
+      document.querySelectorAll(".js-dl-link").forEach(a => {
+        a.href = latestPageUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+      });
+
+      try {
+        const resp = await fetch("https://api.github.com/repos/" + repo + "/releases/latest", {
+          headers: { Accept: "application/vnd.github+json" }
+        });
+        if (!resp.ok) return;
+        const rel = await resp.json();
+        const tag = rel.tag_name || "";
+        const dmgAsset = (rel.assets || []).find(item => item.name && item.name.toLowerCase().endsWith(".dmg"));
+        if (tag) {
+          document.querySelectorAll(".brand-ver").forEach(el => { el.textContent = tag; });
+        }
+        if (dmgAsset && dmgAsset.browser_download_url) {
+          const mb = dmgAsset.size ? (dmgAsset.size / (1024 * 1024)).toFixed(1) + " MB" : "";
+          document.querySelectorAll(".js-dl-link").forEach(a => {
+            a.href = dmgAsset.browser_download_url;
+            a.removeAttribute("target");
+            a.setAttribute("download", dmgAsset.name);
+            if (a.classList.contains("btn-primary") && tag) {
+              const zhSpan = a.querySelector(".zh");
+              const enSpan = a.querySelector(".en");
+              if (zhSpan) zhSpan.textContent = "免费下载 " + tag + " DMG" + (mb ? " (" + mb + ")" : "");
+              if (enSpan) enSpan.textContent = "Download " + tag + " DMG" + (mb ? " (" + mb + ")" : "");
+            }
+          });
+        }
+      } catch {
+        // 离线或 API 限流时静默保留 Releases 兜底页跳转
+      }
+    })();
+
+    const html = document.documentElement;
+    const langBtn = document.getElementById("langBtn");
+    const themeBtn = document.getElementById("themeBtn");
+    const themeIcon = document.getElementById("themeIcon");
+
+    const moonSVG = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    const sunSVG = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+
+    langBtn.addEventListener("click", () => {
+      const next = html.getAttribute("data-lang") === "zh" ? "en" : "zh";
+      html.setAttribute("data-lang", next);
+      langBtn.textContent = next === "zh" ? "EN" : "中";
+      renderPreview(activeKey);
+      renderBattery();
+    });
+
+    themeBtn.addEventListener("click", () => {
+      const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      html.setAttribute("data-theme", next);
+      themeIcon.innerHTML = next === "dark" ? sunSVG : moonSVG;
+    });
+
+    // 动态蓝牙电量展示（自动轮播 4 种真实硬件状态，也支持手动点击切换）
+    const batteryStates = [
+      { level: 92, cls: "" },
+      { level: 64, cls: "" },
+      { level: 16, cls: "low" },
+      { level: null, cls: "offline" }
+    ];
+    let batIdx = 0;
+    const batChip = document.getElementById("batChip");
+    const batFill = document.getElementById("batFill");
+    const batText = document.getElementById("batText");
+
+    function renderBattery() {
+      const state = batteryStates[batIdx];
+      const isEn = html.getAttribute("data-lang") === "en";
+      batChip.className = "bat-chip" + (state.cls ? " " + state.cls : "");
+      if (state.level === null) {
+        batFill.style.width = "0%";
+        batText.textContent = isEn ? "Bat --%" : "电量 --%";
+      } else {
+        batFill.style.width = state.level + "%";
+        batText.textContent = isEn ? ("Bat " + state.level + "%") : ("电量 " + state.level + "%");
+      }
+    }
+
+    let batAutoTimer = setInterval(() => {
+      batIdx = (batIdx + 1) % batteryStates.length;
+      renderBattery();
+    }, 3600);
+
+    batChip.addEventListener("click", () => {
+      clearInterval(batAutoTimer);
+      batIdx = (batIdx + 1) % batteryStates.length;
+      renderBattery();
+      pulseLED();
+      batAutoTimer = setInterval(() => {
+        batIdx = (batIdx + 1) % batteryStates.length;
+        renderBattery();
+      }, 4500);
+    });
+    renderBattery();
+
+    // 复制终端放行命令
+    const copyBtn = document.getElementById("copyCmdBtn");
+    copyBtn.addEventListener("click", async () => {
+      const cmd = document.getElementById("xattrCmd").textContent;
+      try {
+        await navigator.clipboard.writeText(cmd);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = cmd;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+      copyBtn.classList.add("copied");
+      const isEn = html.getAttribute("data-lang") === "en";
+      copyBtn.textContent = isEn ? "Copied" : "已复制";
+      setTimeout(() => {
+        copyBtn.classList.remove("copied");
+        copyBtn.innerHTML = '<span class="zh">复制命令</span><span class="en">Copy</span>';
+      }, 1800);
+    });
+
+    // 交互式 G9N9N 遥控器状态
+    const keyMap = {
+      "03": { badge: "↑", proto: "HID 0x03", zh: "方向上", en: "D-Pad Up", sZh: "方向上 (↑)", sEn: "Arrow Up (↑)", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "04": { badge: "↓", proto: "HID 0x04", zh: "方向下", en: "D-Pad Down", sZh: "方向下 (↓)", sEn: "Arrow Down (↓)", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "05": { badge: "←", proto: "HID 0x05", zh: "方向左", en: "D-Pad Left", sZh: "方向左 (←)", sEn: "Arrow Left (←)", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "06": { badge: "→", proto: "HID 0x06", zh: "方向右", en: "D-Pad Right", sZh: "方向右 (→)", sEn: "Arrow Right (→)", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "07": { badge: "OK", proto: "HID 0x07", zh: "确认键", en: "Select / OK", sZh: "回车发送 (↩)", sEn: "Return / Send (↩)", hZh: "换行不发送 (⇧↩)", hEn: "New Line (⇧↩)" },
+      "0B": { badge: "←", proto: "HID 0x0B", zh: "返回键", en: "Back", sZh: "取消退出 (⎋)", sEn: "Escape (⎋)", hZh: "退格删除 (⌫)", hEn: "Delete (⌫)" },
+      "0A": { badge: "H", proto: "HID 0x0A", zh: "Home 键", en: "Home", sZh: "切换应用 (⌘⇥)", sEn: "Switch App (⌘⇥)", hZh: "显示桌面 (F11)", hEn: "Show Desktop (F11)" },
+      "08": { badge: "M", proto: "HID 0x08", zh: "静音键", en: "Mute", sZh: "撤销 (⌘Z)", sEn: "Undo (⌘Z)", hZh: "重做 (⌘⇧Z)", hEn: "Redo (⌘⇧Z)" },
+      "0E": { badge: "YT", proto: "HID 0x0E", zh: "YouTube 键", en: "YouTube", sZh: "AI 行内编辑 (⌘K)", sEn: "AI Inline Edit (⌘K)", hZh: "AI 对话面板 (⌘L)", hEn: "AI Chat Panel (⌘L)" },
+      "0F": { badge: "NF", proto: "HID 0x0F", zh: "Netflix 键", en: "Netflix", sZh: "切换终端 (⌃`)", sEn: "Toggle Terminal (⌃`)", hZh: "接受代码 (⌘↩)", hEn: "Accept Code (⌘↩)" },
+      "01": { badge: "⏻", proto: "HID 0x01", zh: "电源键", en: "Power", sZh: "锁屏 (⌃⌘Q)", sEn: "Lock Screen (⌃⌘Q)", hZh: "区域截图 (⌃⌘⇧4)", hEn: "Area Capture (⌃⌘⇧4)" },
+      "11": { badge: "⇄", proto: "HID 0x11", zh: "信源键", en: "Input", sZh: "切换麦克风 (M/C)", sEn: "Switch Mic (M/C)", hZh: "原位录制快捷键", hEn: "Custom Shortcut" },
+      "0C": { badge: "+", proto: "HID 0x0C", zh: "音量 ＋", en: "Volume ＋", sZh: "向上翻页 / 音量＋", sEn: "Page Up / Vol+", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "0D": { badge: "−", proto: "HID 0x0D", zh: "音量 －", en: "Volume −", sZh: "向下翻页 / 音量－", sEn: "Page Down / Vol-", hZh: "0ms 连发键（不设长按）", hEn: "0ms Repeat Key" },
+      "voice": { badge: "MIC", proto: "BLE ATVV", zh: "语音键", en: "Voice Key", sZh: "短按开关语音", sEn: "Tap Toggle Voice", hZh: "长按对讲（松手停）", hEn: "Hold to Talk" }
+    };
+
+    const meter = document.getElementById("demoMeter");
+    const pvDb = document.getElementById("pvDb");
+    const bars = [];
+    for (let i = 0; i < 24; i++) {
+      const el = document.createElement("div");
+      el.className = "meter-bar";
+      meter.appendChild(el);
+      bars.push(el);
+    }
+
+    let activeKey = "07";
+    let voiceTimer = null;
+    const ledGlow = document.getElementById("whiteLedGlow");
+    const micLed = document.getElementById("micLed");
+
+    function pulseLED() {
+      ledGlow.classList.add("pulse");
+      setTimeout(() => ledGlow.classList.remove("pulse"), 300);
+    }
+
+    function animateMeter(active) {
+      clearInterval(voiceTimer);
+      if (!active) {
+        micLed.setAttribute("fill", "#363636");
+        pvDb.textContent = "-∞ dB";
+        bars.forEach(b => {
+          b.classList.remove("lit");
+          b.style.background = "";
+        });
+        return;
+      }
+      micLed.setAttribute("fill", "var(--brand)");
+      let ticks = 0;
+      voiceTimer = setInterval(() => {
+        const lvl = Math.floor(6 + Math.random() * 17);
+        const db = Math.round(-44 + (lvl / 24) * 34);
+        pvDb.textContent = db + " dB";
+        bars.forEach((b, idx) => {
+          if (idx < lvl) {
+            b.classList.add("lit");
+            b.style.background = idx > 19 ? "var(--amber)" : "var(--brand)";
+          } else {
+            b.classList.remove("lit");
+            b.style.background = "";
+          }
+        });
+        if (++ticks > 16) animateMeter(false);
+      }, 95);
+    }
+
+    function renderPreview(id) {
+      activeKey = id;
+      const info = keyMap[id] || keyMap["07"];
+      const isEn = html.getAttribute("data-lang") === "en";
+      document.getElementById("pvBadge").textContent = info.badge;
+      document.getElementById("pvProto").textContent = info.proto;
+      document.getElementById("pvName").textContent = isEn ? info.en : info.zh;
+      document.getElementById("pvShort").textContent = isEn ? info.sEn : info.sZh;
+      document.getElementById("pvHold").textContent = isEn ? info.hEn : info.hZh;
+
+      document.querySelectorAll(".r-key, .r-sector").forEach(el => {
+        el.classList.toggle("active", el.getAttribute("data-key") === id);
+      });
+    }
+
+    document.querySelectorAll(".r-key, .r-sector").forEach(el => {
+      el.addEventListener("click", () => {
+        const key = el.getAttribute("data-key");
+        renderPreview(key);
+        pulseLED();
+        animateMeter(key === "voice");
+      });
+    });
+
+    renderPreview("07");
+  </script>
+</body>
+</html>

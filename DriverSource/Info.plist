@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>G9N9NVibeMic</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.g9n9n-vibe.driver</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>G9N9N-Vibe Mic</string>
+    <key>CFBundlePackageType</key>
+    <string>BNDL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFPlugInFactories</key>
+    <dict>
+        <key>6F3A9E2B-8D41-4C7A-B10E-9A5C7D2E4F81</key>
+        <string>G9N9NVibeMic_Create</string>
+    </dict>
+    <key>CFPlugInTypes</key>
+    <dict>
+        <key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+        <array>
+            <string>6F3A9E2B-8D41-4C7A-B10E-9A5C7D2E4F81</string>
+        </array>
+    </dict>
+    <key>AudioServerPlugIn_MachServices</key>
+    <array/>
+</dict>
+</plist>

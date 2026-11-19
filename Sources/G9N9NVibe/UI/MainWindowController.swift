@@ -515,6 +515,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             }
         )
         let host = PurgeableHostingController(root: rootView)
+        if #available(macOS 13.0, *) {
+            host.sizingOptions = [] // 核心：禁用 NSHostingController 对窗口尺寸的反向约束，彻底解决放大后被弹回原样的问题
+        }
         host.view.autoresizingMask = [.width, .height]
         self.hosting = host
 
@@ -603,6 +606,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame newFrame: NSRect) -> NSRect {
         guard let screen = window.screen ?? NSScreen.main else { return newFrame }
         return screen.visibleFrame
+    }
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        return frameSize
     }
 
     func windowWillClose(_ notification: Notification) {

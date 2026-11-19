@@ -25,6 +25,9 @@ hdiutil create \
   "$DMG_OUT"
 
 rm -rf "$STAGE_DIR"
+# 同步生成通用最新别名 DMG，便于发布永远无需固定版本号的永久直链
+cp -f "$DMG_OUT" "$ROOT_DIR/dist/${APP_NAME}.dmg"
 print "✅ 单文件小白 DMG 已生成: $DMG_OUT"
+print "   通用最新别名 DMG: $ROOT_DIR/dist/${APP_NAME}.dmg"
 print "   DMG 大小: $(du -h "$DMG_OUT" | awk '{print $1}')"
 shasum -a 256 "$DMG_OUT"

@@ -74,6 +74,7 @@ jobs:
           path: |
             dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg
             dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg.sha256
+            dist/G9NVibe.dmg
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -84,13 +85,15 @@ jobs:
           files: |
             dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg
             dist/G9NVibe-${{ steps.meta.outputs.version }}.dmg.sha256
+            dist/G9NVibe.dmg
           body: |
             ## G9NVibe ${{ steps.meta.outputs.tag }} (macOS Universal · Apple Silicon & Intel)
 
             把 Google Chromecast (`G9N9N`) 语音遥控器变成 macOS 原生 **Vibe Coding 实体声控与快捷键控制器**。
 
             ### 下载与校验
-            - **安装包**：`G9NVibe-${{ steps.meta.outputs.version }}.dmg`（单文件开包即用，内置纯 C 自研 MIT 虚拟声卡，支持 Apple Silicon M1–M4 与 Intel Mac）
+            - **版本特定安装包**：`G9NVibe-${{ steps.meta.outputs.version }}.dmg`
+            - **永久最新直链通用包**：`G9NVibe.dmg`（永远自动指向本最新 Release，无需在外部链接中固定版本号）
             - **SHA-256**：`${{ steps.pkg.outputs.sha256 }}`
 
             ---
@@ -116,3 +119,36 @@ jobs:
             - **遥控器真实电量与 3 档灵敏度**：原生读取 G9N9N 蓝牙电池服务（`0x180F`）电量；内置 **近场 +14dB / 标准 +20dB / 远场 +26dB** 三档实时 DSP 增益与软限幅。
             - **15 键短按 + 8 键长按扩展**：36 项内置 Vibe Coding 与办公动作 + 任意原位录键；长按双功能与自动场景均拥有独立宽敞配置页。
             - **随前台应用自动切换预设**：在 Cursor / VS Code / Antigravity / Xcode / 终端与浏览器 / 办公应用间自动无损切换独立键位档案。
+
+      - name: Auto Sync Website Version & Config
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.meta.outputs.version }}"
+          TAG="${{ steps.meta.outputs.tag }}"
+          DMG_SIZE_MB="$(du -m "dist/G9NVibe-${VER}.dmg" | awk '{print $1}')"
+
+          python3 -c "
+          import re
+          path = 'docs/index.html'
+          with open(path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          content = re.sub(r'<span class=\"brand-ver\">v[0-9.]+</span>', f'<span class=\"brand-ver\">{TAG}</span>', content)
+          content = re.sub(r'免费下载 v[0-9.]+ macOS DMG \([0-9.]+ MB\)', f'免费下载 {TAG} macOS DMG ({DMG_SIZE_MB} MB)', content)
+          content = re.sub(r'Download v[0-9.]+ macOS DMG \([0-9.]+ MB\)', f'Download {TAG} macOS DMG ({DMG_SIZE_MB} MB)', content)
+          content = re.sub(r'releases/download/v[0-9.]+/G9NVibe-[0-9.]+\.dmg', f'releases/download/{TAG}/G9NVibe-{VER}.dmg', content)
+
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          print('Successfully updated docs/index.html for ' + TAG)
+          "
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html VERSION Packaging/Info.plist || true
+          if ! git diff-index --quiet HEAD --; then
+            git commit -m "chore(release): 自动同步发布版本 $TAG 至官网与配置文件 [skip ci]"
+            git push origin HEAD:${GITHUB_REF_NAME:-main} || true
+          fi

@@ -1330,6 +1330,7 @@
         if (!resp.ok) return;
         const rel = await resp.json();
         const tag = rel.tag_name || "";
+        // 自动匹配最新 Release 里的 DMG 安装包资产
         const dmgAsset = (rel.assets || []).find(item => item.name && item.name.toLowerCase().endsWith(".dmg"));
         if (tag) {
           document.querySelectorAll(".brand-ver").forEach(el => { el.textContent = tag; });
@@ -1343,13 +1344,13 @@
             if (a.classList.contains("btn-primary") && tag) {
               const zhSpan = a.querySelector(".zh");
               const enSpan = a.querySelector(".en");
-              if (zhSpan) zhSpan.textContent = "免费下载 " + tag + " DMG" + (mb ? " (" + mb + ")" : "");
-              if (enSpan) enSpan.textContent = "Download " + tag + " DMG" + (mb ? " (" + mb + ")" : "");
+              if (zhSpan) zhSpan.textContent = "免费下载 " + tag + " macOS DMG" + (mb ? " (" + mb + ")" : "");
+              if (enSpan) enSpan.textContent = "Download " + tag + " macOS DMG" + (mb ? " (" + mb + ")" : "");
             }
           });
         }
       } catch {
-        // 离线或 API 限流时，静默保持默认的最新 v1.0.3 DMG 直链，绝不跳网页
+        // 离线或 API 限流时，静默保持默认的最新 DMG 直链，绝不跳网页
       }
     })();
 

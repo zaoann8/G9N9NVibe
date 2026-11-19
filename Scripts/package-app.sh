@@ -43,8 +43,9 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources/Driver"
 
-cp "$BIN_SRC" "$APP_BUNDLE/Contents/MacOS/G9N9NVibe"
-strip -x "$APP_BUNDLE/Contents/MacOS/G9N9NVibe"
+cp "$BIN_SRC" "$APP_BUNDLE/Contents/MacOS/G9NVibe"
+strip -x "$APP_BUNDLE/Contents/MacOS/G9NVibe"
+ln -sf G9NVibe "$APP_BUNDLE/Contents/MacOS/G9N9NVibe"
 cp "$ROOT_DIR/Packaging/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$ICON_SRC" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 ditto "$DRIVER_SRC" "$APP_BUNDLE/Contents/Resources/Driver/G9N9NVibeMic.driver"
@@ -58,5 +59,5 @@ codesign --force --deep --sign - \
 
 codesign --verify --deep --strict "$APP_BUNDLE"
 print "✅ 已生成应用包: $APP_BUNDLE"
-print "   主程序大小: $(du -sh "$APP_BUNDLE/Contents/MacOS/G9N9NVibe" | awk '{print $1}')"
+print "   主程序大小: $(du -sh "$APP_BUNDLE/Contents/MacOS/G9NVibe" | awk '{print $1}')"
 print "   整体包大小: $(du -sh "$APP_BUNDLE" | awk '{print $1}')"

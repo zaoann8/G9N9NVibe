@@ -77,7 +77,8 @@ struct MainConsoleRootView: View {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.82), value: vm.toastMessage)
         }
-        .frame(minWidth: 840, idealWidth: 960, maxWidth: .infinity, minHeight: 600, idealHeight: 660, maxHeight: .infinity)
+        .frame(minWidth: 840, minHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.windowBg)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -514,7 +515,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             }
         )
         let host = PurgeableHostingController(root: rootView)
-        host.preferredContentSize = NSSize(width: 960, height: 660)
+        host.view.autoresizingMask = [.width, .height]
         self.hosting = host
 
         let win = KeyBorderlessWindow(
@@ -529,7 +530,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.hasShadow = true
         win.isMovableByWindowBackground = true
         win.isReleasedWhenClosed = false
-        win.collectionBehavior = [.fullScreenNone]
+        win.collectionBehavior = [.fullScreenPrimary, .fullScreenAuxiliary]
         win.contentViewController = host
         win.setContentSize(NSSize(width: 960, height: 660))
         win.minSize = NSSize(width: 840, height: 600)
@@ -562,18 +563,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         self.window = nil
         isZoomed = false
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并安排多轮内核深度内存回收")
+        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并安全回收内存")
 
-        // 立即第一轮快速释放
+        // 安全清理渲染临时缓存与空闲页（绝不破坏 NanoZone / TinyZone 元数据）
         MemoryReclaim.performDeepPurge()
-
-        // 待主线程当前事件循环 RunLoop 完全退出、AutoreleasePool 彻底清空后，安排延迟两轮深度内存归还
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            MemoryReclaim.performDeepPurge()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            MemoryReclaim.performDeepPurge()
-        }
     }
 
     func minimizeWindow() {
@@ -585,8 +578,11 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         guard let screen = win.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
 
-        if isZoomed {
-            // 还原至标准尺寸（若有记录用记录值，否则居中 960x660）
+        // 判断当前窗口是否已经贴合满屏尺寸（容差 10pt）
+        let isAlreadyFull = abs(win.frame.width - visible.width) < 10 && abs(win.frame.height - visible.height) < 10
+
+        if isAlreadyFull {
+            // 还原至标准居中尺寸（960x660）
             let target = normalFrame ?? NSRect(
                 x: visible.origin.x + (visible.width - 960) / 2,
                 y: visible.origin.y + (visible.height - 660) / 2,
@@ -596,12 +592,17 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             isZoomed = false
             win.setFrame(target, display: true, animate: true)
         } else {
-            // 保存当前位置以便下一次精准还原
+            // 保存当前位置以便还原
             normalFrame = win.frame
-            // 100% 满屏无缝铺满整个可用屏幕（顶部紧贴菜单栏，底部紧贴 Dock 栏，两侧完全占满）
             isZoomed = true
+            // 真正 100% 满屏占满（无边距，无回弹）
             win.setFrame(visible, display: true, animate: true)
         }
+    }
+
+    func windowWillUseStandardFrame(_ window: NSWindow, defaultFrame newFrame: NSRect) -> NSRect {
+        guard let screen = window.screen ?? NSScreen.main else { return newFrame }
+        return screen.visibleFrame
     }
 
     func windowWillClose(_ notification: Notification) {

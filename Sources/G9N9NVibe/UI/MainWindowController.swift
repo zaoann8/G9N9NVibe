@@ -73,7 +73,7 @@ struct MainConsoleRootView: View {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.82), value: vm.toastMessage)
         }
-        .frame(minWidth: 960, minHeight: 660)
+        .frame(minWidth: 960, idealWidth: 960, minHeight: 660, idealHeight: 700)
         .background(palette.windowBg)
         .preferredColorScheme(vm.themePreference == .system ? nil : (vm.themePreference == .dark ? .dark : .light))
         .sheet(isPresented: $vm.showOnboarding) {
@@ -409,6 +409,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         let rootView = MainConsoleRootView(vm: viewModel, store: mappingStore)
         let hosting = NSHostingController(rootView: rootView)
+        hosting.preferredContentSize = NSSize(width: 960, height: 700)
 
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 700),
@@ -420,8 +421,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.titleVisibility = .hidden
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false
-        win.minSize = NSSize(width: 960, height: 660)
         win.contentViewController = hosting
+        win.setContentSize(NSSize(width: 960, height: 700))
+        win.minSize = NSSize(width: 960, height: 660)
         win.delegate = self
         win.center()
 

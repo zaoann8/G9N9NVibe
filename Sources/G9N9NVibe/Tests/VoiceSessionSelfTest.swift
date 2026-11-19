@@ -76,6 +76,7 @@ enum VoiceSessionSelfTest {
         run("新功能：Vibe Coding 专属动作键码与修饰位校验", testVibeCodingExpandedActions)
         run("新功能：语义化版本比较与 SHA-256 完整性解析校验", testUpdaterSemVerAndSHA256)
         run("新功能：覆盖更新安全目标路径防呆（避开只读卷与隔离区）", testUpdaterSafeTargetResolution)
+        run("新功能：真实安全覆盖与旧进程回收流程自测", testAtomicReplaceScriptExecution)
         print("✅ 全部智能随动、VoiceSession & 防冲突自测通过（\(passedCount)/\(passedCount)）")
     }
 
@@ -721,6 +722,75 @@ enum VoiceSessionSelfTest {
         let translocated = URL(fileURLWithPath: "/private/var/folders/xx/AppTranslocation/ABC/d/G9NVibe.app")
         expect(AppUpdater.resolveInstallTargetURL(bundleURL: translocated).path == "/Applications/G9NVibe.app",
                "处于 AppTranslocation 隔离区时必须重定向安装至 /Applications")
+    }
+
+    // MARK: - 25. 真实安全静默覆盖与防卡死替换流程自测
+
+    private static func testAtomicReplaceScriptExecution() {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory.appendingPathComponent("G9N9N-UpdateTest-\(UUID().uuidString)", isDirectory: true)
+        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+
+        let targetDir = tempRoot.appendingPathComponent("TargetApp.app", isDirectory: true)
+        let stagedDir = tempRoot.appendingPathComponent("StagedApp.app", isDirectory: true)
+        let scriptDir = tempRoot.appendingPathComponent("ScriptDir", isDirectory: true)
+        try? fm.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: stagedDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: scriptDir, withIntermediateDirectories: true)
+
+        let oldFile = targetDir.appendingPathComponent("version.txt")
+        let newFile = stagedDir.appendingPathComponent("version.txt")
+        try? "1.0.0".write(to: oldFile, atomically: true, encoding: .utf8)
+        try? "1.0.1".write(to: newFile, atomically: true, encoding: .utf8)
+
+        // 模拟一个旧进程（启动一个后台 sleep 进程）
+        let mockProc = Process()
+        mockProc.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        mockProc.arguments = ["5"]
+        try? mockProc.run()
+        let mockPID = mockProc.processIdentifier
+
+        let scriptURL = scriptDir.appendingPathComponent("test-replace.sh")
+        let backupPath = tempRoot.appendingPathComponent(".TargetApp.backup-\(mockPID).app").path
+        let newSlotPath = tempRoot.appendingPathComponent(".TargetApp.new-\(mockPID).app").path
+
+        let script = """
+        #!/bin/zsh
+        set -e
+        TARGET='\(targetDir.path)'
+        STAGED='\(stagedDir.path)'
+        BACKUP='\(backupPath)'
+        NEWSLOT='\(newSlotPath)'
+
+        for _ in {1..10}; do
+          if ! kill -0 \(mockPID) 2>/dev/null; then break; fi
+          sleep 0.05
+        done
+        kill -9 \(mockPID) 2>/dev/null || true
+
+        rm -rf "$NEWSLOT" "$BACKUP"
+        /usr/bin/ditto "$STAGED" "$NEWSLOT"
+        if [ -d "$TARGET" ]; then
+          mv "$TARGET" "$BACKUP"
+        fi
+        mv "$NEWSLOT" "$TARGET"
+        rm -rf "$BACKUP"
+        """
+
+        try? script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        _ = try? Process.run(URL(fileURLWithPath: "/bin/chmod"), arguments: ["+x", scriptURL.path])
+
+        let runScript = Process()
+        runScript.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        runScript.arguments = [scriptURL.path]
+        try? runScript.run()
+        runScript.waitUntilExit()
+
+        expect(runScript.terminationStatus == 0, "替换脚本执行退出码必须为 0")
+        let finalVersion = (try? String(contentsOf: oldFile, encoding: .utf8)) ?? ""
+        expect(finalVersion == "1.0.1", "目标目录内容必须成功无损升级为新版 (当前: \(finalVersion))")
+        expect(!mockProc.isRunning, "旧进程必须已被强制回收")
     }
 }
 #endif

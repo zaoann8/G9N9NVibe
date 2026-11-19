@@ -406,11 +406,8 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
                     window.orderOut(nil)
                     window.close()
                 }
-                NSApp.terminate(nil)
-                // 延时 0.15 秒兜底强退，确保旧进程彻底退出，绝不留存双实例
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    exit(0)
-                }
+                // 立即执行 POSIX exit(0)，绝不让任何 RunLoop 或模态窗口阻止退出
+                exit(0)
             }
         } catch {
             failAndCleanup("启动覆盖安装失败：\(error.localizedDescription)")
@@ -438,17 +435,23 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         NEWSLOT=\(shellQuote(newSlotPath))
         TMPDIR=\(shellQuote(tempDir.path))
 
-        # 1. 优先等待旧主进程优雅退出（最多等 2 秒）
-        for _ in {1..20}; do
+        # 1. 优先等待旧主进程优雅退出（最多等 1.5 秒）
+        for _ in {1..15}; do
           if ! kill -0 \(pid) 2>/dev/null; then break; fi
           sleep 0.1
         done
 
-        # 若旧主进程未及时退出，坚决强制终止旧主进程，防止多开两个 App 或两个窗口
+        # 若旧主进程仍未完全退出，坚决强制终止旧主进程，防止多开两个 App 或两个窗口
         if kill -0 \(pid) 2>/dev/null; then
           kill -9 \(pid) 2>/dev/null || true
           sleep 0.2
         fi
+
+        # 确保旧进程彻底消亡
+        while kill -0 \(pid) 2>/dev/null; do
+          kill -9 \(pid) 2>/dev/null || true
+          sleep 0.1
+        done
 
         # 2. 先拷贝到同分区新槽位并清隔离标记，确保后续 mv 为瞬时原子操作
         rm -rf "$NEWSLOT" "$BACKUP"
@@ -466,9 +469,9 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
           exit 1
         fi
 
-        # 4. 清理备份与临时目录，标准唤起启动全新版本（去除 -n 参数，严格维持单实例）
+        # 4. 清理备份与临时目录，标准唤起启动全新版本（传入旧 PID 协助新版本守护唯一实例）
         rm -rf "$BACKUP" "$TMPDIR"
-        /usr/bin/open "$TARGET"
+        /usr/bin/open "$TARGET" --args --restarted-from-update \(pid)
         """
 
         try ("#!/bin/zsh\n" + coreBody + "\n").write(to: scriptURL, atomically: true, encoding: .utf8)

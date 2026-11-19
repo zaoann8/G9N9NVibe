@@ -23,11 +23,25 @@ final class AppController: NSObject, NSApplicationDelegate {
         AppLog.setup()
         AppLog.write("APP", "G9N9N-Vibe \(AppStorage.appVersionString) 启动")
 
-        // 0. 单实例单进程守护：若已有相同 Bundle ID 实例在运行，直接激活已有窗口并退出当前重复进程
+        // 0. 单实例单进程守护与升级重启交接
         let currentPID = ProcessInfo.processInfo.processIdentifier
         let bundleID = Bundle.main.bundleIdentifier ?? "io.github.g9n9n-vibe"
+
+        // 若是从更新升级重启而来，坚决清除被替换的旧进程 PID，绝不被旧进程反杀
+        var ignoredPID: pid_t = 0
+        if let idx = CommandLine.arguments.firstIndex(of: "--restarted-from-update"),
+           idx + 1 < CommandLine.arguments.count,
+           let oldPID = Int32(CommandLine.arguments[idx + 1]) {
+            ignoredPID = oldPID
+            if oldPID != currentPID {
+                kill(oldPID, SIGKILL)
+                usleep(50_000)
+            }
+        }
+
         let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-        if let existing = runningApps.first(where: { $0.processIdentifier != currentPID }) {
+        let otherInstances = runningApps.filter { $0.processIdentifier != currentPID && $0.processIdentifier != ignoredPID }
+        if let existing = otherInstances.first {
             AppLog.write("APP", "检测到已有 G9NVibe 实例在运行 (PID: \(existing.processIdentifier))，激活已有窗口并退出当前冗余进程")
             existing.activate(options: [.activateIgnoringOtherApps])
             exit(0)

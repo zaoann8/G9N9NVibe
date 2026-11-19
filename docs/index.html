@@ -507,7 +507,7 @@
     /* 紧凑硬件指标横带（Spec Strip） */
     .spec-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 13px;
@@ -889,8 +889,8 @@
           <span class="en">Chromecast Remote,<br/>Rebuilt for <span class="accent">Vibe Coding</span></span>
         </h1>
         <p class="hero-desc">
-          <span class="zh">专为 Google Chromecast (<code>G9N9N</code>) 设计的 macOS 原生硬件桥接器。支持智能双麦按源随动、3 档实时 DSP 灵敏度、15 键短按与 8 键长按扩展，以及按前台 IDE 自动切换预设——待机零橙灯、永不常驻接管系统默认麦。</span>
-          <span class="en">A precision macOS bridge for the Google Chromecast (<code>G9N9N</code>) remote. Smart dual-mic routing, 3-step DSP gain, 15 tap + 8 hold bindings, and zero-polling per-app profile switching—without hijacking your system mic.</span>
+          <span class="zh">专为 Google Chromecast (<code>G9N9N</code>) 设计的 macOS 原生硬件桥接器。支持智能双麦按源随动、3 档实时 DSP 灵敏度、语音键置顶排布、15 键短按与 8 键长按扩展，以及按前台 IDE 自动切换预设——后台常驻低至 8MB~12MB、待机零橙灯、永不常驻接管系统默认麦。</span>
+          <span class="en">A precision macOS bridge for the Google Chromecast (<code>G9N9N</code>) remote. Smart dual-mic routing, 3-step DSP gain, top-ranked Voice key, 15 tap + 8 hold bindings, and zero-polling per-app profile switching—with ultra-lean 8MB~12MB RAM and zero system mic hijacking.</span>
         </p>
 
         <div class="hero-cta">
@@ -1032,12 +1032,16 @@
     <!-- 紧凑硬件级指标带 -->
     <div class="spec-strip">
       <div class="spec-cell">
-        <div class="spec-num">2.0 MB</div>
-        <div class="spec-lbl"><span class="zh">Universal 双架构单包体积</span><span class="en">Universal DMG Footprint</span></div>
+        <div class="spec-num">8 ~ 12 MB</div>
+        <div class="spec-lbl"><span class="zh">极致常驻内存 · 关窗退还脏页</span><span class="en">Ultra-Low RAM · Auto Page Relief</span></div>
       </div>
       <div class="spec-cell">
-        <div class="spec-num">48 kHz</div>
-        <div class="spec-lbl"><span class="zh">纯 C 零堆分配 CoreAudio 驱动</span><span class="en">Zero-Alloc C HAL Driver</span></div>
+        <div class="spec-num">2.7 MB</div>
+        <div class="spec-lbl"><span class="zh">Universal 双架构 · 零依赖单包</span><span class="en">Universal DMG · Zero Bloat</span></div>
+      </div>
+      <div class="spec-cell">
+        <div class="spec-num">120 Hz</div>
+        <div class="spec-lbl"><span class="zh">Canvas 批量绘制 · 零堆对象高刷</span><span class="en">Canvas Batch · 120Hz ProMotion</span></div>
       </div>
       <div class="spec-cell">
         <div class="spec-num">0 ms</div>
@@ -1045,18 +1049,18 @@
       </div>
       <div class="spec-cell">
         <div class="spec-num">0% Idle</div>
-        <div class="spec-lbl"><span class="zh">按需采麦 · 待机零常亮橙灯</span><span class="en">On-Demand Mic · No Constant Dot</span></div>
+        <div class="spec-lbl"><span class="zh">按需采麦 · 永不常驻接管系统麦</span><span class="en">On-Demand · No Constant Hijack</span></div>
       </div>
     </div>
 
-    <!-- 四大核心工作区 -->
+    <!-- 六大核心工作区与硬核优势 -->
     <section id="features">
       <div class="sec-head">
         <div>
-          <div class="sec-kicker">ARCHITECTURE</div>
-          <h2 class="sec-title"><span class="zh">四大独立工作区，精工而不臃肿</span><span class="en">Four Focused Workspaces</span></h2>
+          <div class="sec-kicker">ARCHITECTURE &amp; PERFORMANCE</div>
+          <h2 class="sec-title"><span class="zh">六大硬核优势，精工而不臃肿</span><span class="en">Six Precision Engineering Highlights</span></h2>
         </div>
-        <p class="sec-sub"><span class="zh">100% 原生 Swift 与纯 C 架构，关窗即释放视图树，极低后台常驻占用。</span><span class="en">100% native Swift &amp; pure C. Releases the SwiftUI tree on window close for minimal RAM.</span></p>
+        <p class="sec-sub"><span class="zh">100% 原生 Swift 与纯 C 架构，关窗即释放视图树，常驻极低后台内存。</span><span class="en">100% native Swift &amp; pure C. Releases SwiftUI view tree on close for 8MB~12MB RAM.</span></p>
       </div>
 
       <div class="grid-2">
@@ -1068,8 +1072,8 @@
               </div>
               <span class="feat-idx">01 / AUDIO</span>
             </div>
-            <h3><span class="zh">智能随动双麦 · 系统麦永不常驻接管</span><span class="en">Smart Dual-Mic · Zero System Hijack</span></h3>
-            <p><span class="zh">提供仅电脑麦、智能随动、仅遥控器麦、双麦合并与一键关闭双麦。按键盘走电脑麦、按遥控器走遥控器麦；内置近场 +14dB / 标准 +20dB / 远场 +26dB 三档实时 DSP 增益与 0x180F 蓝牙硬件真实电量。</span><span class="en">4 routing modes plus Mute All. Keyboard uses Mac mic, remote uses remote mic. Features 3-step live DSP gain (+14/+20/+26 dB) with soft limiting and hardware BLE 0x180F battery readout.</span></p>
+            <h3><span class="zh">智能随动双麦 · 语音键首位置顶</span><span class="en">Smart Dual-Mic · Top-Ranked Voice Key</span></h3>
+            <p><span class="zh">常用语音键置顶排在第 1 行；提供仅电脑麦、智能随动、仅遥控器麦、双麦合并与一键关闭双麦。按键盘走电脑麦、按遥控器走遥控器麦；内置近场 +14dB / 标准 +20dB / 远场 +26dB 三档实时 DSP 增益与 0x180F 蓝牙硬件真实电量。</span><span class="en">Voice key ranked #1. 4 routing modes plus Mute All. Keyboard uses Mac mic, remote uses remote mic. Features 3-step live DSP gain (+14/+20/+26 dB) with soft limiting and hardware BLE 0x180F battery readout.</span></p>
           </div>
           <div class="feat-tags">
             <span class="feat-tag">Pure C MIT Driver</span>
@@ -1129,6 +1133,42 @@
             <span class="feat-tag">Cursor / VS Code / Xcode</span>
             <span class="feat-tag">Custom App Rules</span>
             <span class="feat-tag">Zero Polling</span>
+          </div>
+        </div>
+
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon green">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              </div>
+              <span class="feat-idx">05 / PERFORMANCE</span>
+            </div>
+            <h3><span class="zh">8MB~12MB 极致内存 · 关窗退还脏页</span><span class="en">8MB~12MB RAM · Auto Page Relief</span></h3>
+            <p><span class="zh">绝非臃肿框架或套壳工具：微光柱采用 CoreGraphics 单层 Canvas 批量极速渲染，120Hz 满血高刷且 0 堆对象分配；关窗主动调用 <code>malloc_zone_pressure_relief</code> 退还脏页，常驻仅 8MB~12MB。</span><span class="en">Zero bloatware: CoreGraphics Canvas draws audio meters with zero heap allocation at 120Hz. Calls malloc_zone_pressure_relief on close for 8MB~12MB background RAM.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">8MB~12MB Idle RAM</span>
+            <span class="feat-tag">Canvas Batch Draw</span>
+            <span class="feat-tag">Zero Heap Allocation</span>
+          </div>
+        </div>
+
+        <div class="feat-card">
+          <div>
+            <div class="feat-top">
+              <div class="feat-icon brand">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+              </div>
+              <span class="feat-idx">06 / SILENT UPDATE</span>
+            </div>
+            <h3><span class="zh">原生静默覆盖升级 · 100% 保留系统权限</span><span class="en">Silent In-Place Update · Zero Perm Loss</span></h3>
+            <p><span class="zh">原生集成 GitHub Releases 与哈希完整性校验，一键静默安装并自动平滑重启，100% 自动保留已授予的辅助功能与麦克风等系统权限；常驻菜单栏控制卡支持点击外部区域瞬间自动收起。</span><span class="en">Seamless GitHub Releases integration with SHA-256 validation. One-click silent install preserves all macOS Accessibility &amp; Microphone permissions. Click-away auto-dismiss popover.</span></p>
+          </div>
+          <div class="feat-tags">
+            <span class="feat-tag">Auto Preserve Perms</span>
+            <span class="feat-tag">POSIX Safe Exit</span>
+            <span class="feat-tag">Click-Away Dismiss</span>
           </div>
         </div>
       </div>

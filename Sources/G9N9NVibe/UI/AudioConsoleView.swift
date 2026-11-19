@@ -10,14 +10,15 @@ struct AudioConsoleView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 平滑自适应比例：在紧凑黄金窗口 820×580 下 1.0 完美铺满绝无遮挡，拉大时各模块同步舒展
-            let scale = min(1.22, max(0.96, min(geo.size.width / 780.0, geo.size.height / 510.0)))
-            let rightWidth = max(296, min(420, geo.size.width * 0.365))
-            let barHeight = 12.0 * scale
+            // 平滑自适应比例：基于标准 960×660 窗口（工作区约 924×580），支持等比放大，最小 0.92 弹性保底
+            let scale = min(1.22, max(0.92, min(geo.size.width / 920.0, geo.size.height / 570.0)))
+            let rightWidth = max(310, min(440, geo.size.width * 0.365))
+            let barHeight = 12.5 * scale
 
             VStack(spacing: 10 * scale) {
-                // 顶部 4 档策略条 + 一键关闭双麦
+                // 顶部 4 档策略条 + 一键关闭双麦（优先级高，绝不被截断）
                 policyStrip(scale: scale)
+                    .layoutPriority(1)
 
                 // 2 -> 1 汇聚声道区：横向 63.5% / 36.5% 满屏舒展，纵向随窗口高度同步放大且内部均匀呼吸
                 HStack(spacing: 12 * scale) {
@@ -33,8 +34,9 @@ struct AudioConsoleView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // 底部 3 x 2 高辨识度语义自检状态方阵（随窗口适度舒展）
+                // 底部 3 x 2 高辨识度语义自检状态方阵（给予最高排版保护，确保底边框与圆角 100% 完整舒展）
                 healthSection(scale: scale)
+                    .layoutPriority(2)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -718,10 +720,10 @@ struct AudioConsoleView: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(accent)
                     .frame(width: 3.5)
-                    .padding(.vertical, 8 * scale)
+                    .padding(.vertical, 6 * scale)
                     .padding(.leading, 6)
 
-                VStack(alignment: .leading, spacing: 6 * scale) {
+                VStack(alignment: .leading, spacing: 5 * scale) {
                     HStack {
                         Text(title)
                             .font(VibeFont.label(11.5 * scale, weight: .medium))
@@ -747,7 +749,7 @@ struct AudioConsoleView: View {
                     }
                 }
                 .padding(.horizontal, 10 * scale)
-                .padding(.vertical, 10 * scale)
+                .padding(.vertical, 8 * scale)
             }
             .background(RoundedRectangle(cornerRadius: 12).fill(cardBg))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(borderColor, lineWidth: 1.1))

@@ -2,10 +2,11 @@ import AppKit
 import SwiftUI
 
 /// 纯 AppKit 极简常驻菜单栏控制器（平时不加载主窗口，常驻极低内存）
-final class StatusBarController: NSObject {
+final class StatusBarController: NSObject, NSPopoverDelegate {
     private let statusItem: NSStatusItem
     private let viewModel: AppViewModel
     private var popover: NSPopover?
+    private var eventMonitor: Any?
 
     var onOpenMainWindow: (() -> Void)?
     var onCheckUpdatesRequested: (() -> Void)?
@@ -87,6 +88,7 @@ final class StatusBarController: NSObject {
 
         let pop = NSPopover()
         pop.behavior = .transient
+        pop.delegate = self
         pop.contentSize = NSSize(width: 256, height: 324)
         pop.contentViewController = NSHostingController(
             rootView: MenuBarQuickCardView(
@@ -110,13 +112,38 @@ final class StatusBarController: NSObject {
         )
         self.popover = pop
         pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        startEventMonitor()
     }
 
     func closePopover() {
+        stopEventMonitor()
         popover?.performClose(nil)
         // 关闭即释放菜单栏 Popover 视图树
         popover?.contentViewController = nil
         popover = nil
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        stopEventMonitor()
+        popover?.contentViewController = nil
+        popover = nil
+    }
+
+    private func startEventMonitor() {
+        stopEventMonitor()
+        // 全局监听：当用户在屏幕任何地方（桌面、其他App窗口）点击时，自动关闭 Popover
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.closePopover()
+            }
+        }
+    }
+
+    private func stopEventMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
 }
 

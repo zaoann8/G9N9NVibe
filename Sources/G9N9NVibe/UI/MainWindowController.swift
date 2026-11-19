@@ -47,8 +47,8 @@ struct MainConsoleRootView: View {
                         AutoAppSceneView(vm: vm, store: store, palette: palette)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // 全局轻量底部操作反馈气泡（2.2 秒自动淡出，不遮挡操作）
@@ -73,7 +73,7 @@ struct MainConsoleRootView: View {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.82), value: vm.toastMessage)
         }
-        .frame(minWidth: 820, idealWidth: 820, minHeight: 560, idealHeight: 580)
+        .frame(minWidth: 840, idealWidth: 960, minHeight: 600, idealHeight: 660)
         .background(palette.windowBg)
         .preferredColorScheme(vm.themePreference == .system ? nil : (vm.themePreference == .dark ? .dark : .light))
         .sheet(isPresented: $vm.showOnboarding) {
@@ -409,10 +409,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         let rootView = MainConsoleRootView(vm: viewModel, store: mappingStore)
         let hosting = NSHostingController(rootView: rootView)
-        hosting.preferredContentSize = NSSize(width: 820, height: 580)
+        hosting.preferredContentSize = NSSize(width: 960, height: 660)
 
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -422,8 +422,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false
         win.contentViewController = hosting
-        win.setContentSize(NSSize(width: 820, height: 580))
-        win.minSize = NSSize(width: 820, height: 560)
+        win.setContentSize(NSSize(width: 960, height: 660))
+        win.minSize = NSSize(width: 840, height: 600)
         win.delegate = self
         win.center()
 

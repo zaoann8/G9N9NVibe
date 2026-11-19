@@ -162,14 +162,18 @@ struct MicroLevelMeterView: View {
 
     var body: some View {
         let lit = Int((normalizedLevel * Double(barCount)).rounded())
-        HStack(spacing: 2.5) {
-            ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(color(for: index, lit: lit))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: barHeight)
+        Canvas { context, size in
+            let spacing: CGFloat = 2.5
+            let totalSpacing = spacing * CGFloat(barCount - 1)
+            let barWidth = max(1.0, (size.width - totalSpacing) / CGFloat(barCount))
+            for index in 0..<barCount {
+                let x = CGFloat(index) * (barWidth + spacing)
+                let rect = CGRect(x: x, y: max(0, (size.height - barHeight) / 2.0), width: barWidth, height: barHeight)
+                let path = Path(roundedRect: rect, cornerRadius: 1.5)
+                context.fill(path, with: .color(color(for: index, lit: lit)))
             }
         }
+        .frame(height: barHeight)
         .animation(.easeOut(duration: 0.08), value: lit)
     }
 

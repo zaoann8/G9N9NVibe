@@ -10,18 +10,18 @@ struct AudioConsoleView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // 平滑自适应比例：默认窗口 1.0 完整舒展绝不遮挡，拉大窗口时模块尺寸、微光柱与字号同步优雅放大铺满全屏
-            let scale = min(1.22, max(1.0, min(geo.size.width / 880.0, geo.size.height / 610.0)))
-            let rightWidth = max(336, min(480, geo.size.width * 0.37))
-            let barHeight = 13.0 * scale
+            // 平滑自适应比例：在紧凑黄金窗口 820×580 下 1.0 完美铺满绝无遮挡，拉大时各模块同步舒展
+            let scale = min(1.22, max(0.96, min(geo.size.width / 780.0, geo.size.height / 510.0)))
+            let rightWidth = max(296, min(420, geo.size.width * 0.365))
+            let barHeight = 12.0 * scale
 
-            VStack(spacing: 12 * scale) {
+            VStack(spacing: 10 * scale) {
                 // 顶部 4 档策略条 + 一键关闭双麦
                 policyStrip(scale: scale)
 
-                // 2 -> 1 汇聚声道区：横向 63% / 37% 满屏舒展，纵向随窗口高度同步放大且内部均匀呼吸
-                HStack(spacing: 14 * scale) {
-                    VStack(spacing: 12 * scale) {
+                // 2 -> 1 汇聚声道区：横向 63.5% / 36.5% 满屏舒展，纵向随窗口高度同步放大且内部均匀呼吸
+                HStack(spacing: 12 * scale) {
+                    VStack(spacing: 10 * scale) {
                         macChannelCard(scale: scale, barHeight: barHeight)
                         remoteChannelCard(scale: scale, barHeight: barHeight)
                     }

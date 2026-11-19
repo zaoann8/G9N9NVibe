@@ -47,8 +47,8 @@ struct MainConsoleRootView: View {
                         AutoAppSceneView(vm: vm, store: store, palette: palette)
                     }
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 18)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // 全局轻量底部操作反馈气泡（2.2 秒自动淡出，不遮挡操作）
@@ -73,7 +73,7 @@ struct MainConsoleRootView: View {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.82), value: vm.toastMessage)
         }
-        .frame(minWidth: 960, idealWidth: 960, minHeight: 660, idealHeight: 700)
+        .frame(minWidth: 820, idealWidth: 820, minHeight: 560, idealHeight: 580)
         .background(palette.windowBg)
         .preferredColorScheme(vm.themePreference == .system ? nil : (vm.themePreference == .dark ? .dark : .light))
         .sheet(isPresented: $vm.showOnboarding) {
@@ -409,10 +409,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         let rootView = MainConsoleRootView(vm: viewModel, store: mappingStore)
         let hosting = NSHostingController(rootView: rootView)
-        hosting.preferredContentSize = NSSize(width: 960, height: 700)
+        hosting.preferredContentSize = NSSize(width: 820, height: 580)
 
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 580),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -422,8 +422,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false
         win.contentViewController = hosting
-        win.setContentSize(NSSize(width: 960, height: 700))
-        win.minSize = NSSize(width: 960, height: 660)
+        win.setContentSize(NSSize(width: 820, height: 580))
+        win.minSize = NSSize(width: 820, height: 560)
         win.delegate = self
         win.center()
 
@@ -442,5 +442,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window = nil
         onVisibilityChanged?(false)
         AppLog.write("UI", "主窗口已关闭并彻底释放 SwiftUI 视图树内存")
+
+        // 极致内存调优：延时 0.15 秒主动通知底层分配器将已释放的内存脏页归还系统内核
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            malloc_zone_pressure_relief(nil, 0)
+        }
     }
 }

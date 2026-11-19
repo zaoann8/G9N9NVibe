@@ -480,6 +480,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private var hosting: PurgeableHostingController?
     private var isZoomed = false
     private var normalFrame: NSRect?
+    private var lastZoomTime: TimeInterval = 0
 
     var onVisibilityChanged: ((Bool) -> Void)?
 
@@ -558,17 +559,12 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func closeWindow() {
         guard let win = window else { return }
+        // 核心：单例复用，隐藏窗口而不重复销毁重建，彻底杜绝内存越滚越大涨到 48M 的问题！
         win.orderOut(nil)
-        hosting?.purgeViewGraph()
-        hosting = nil
-        win.contentViewController = nil
-        win.delegate = nil
-        self.window = nil
-        isZoomed = false
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并安全回收内存")
+        AppLog.write("UI", "主窗口已隐藏（单例保持复用，零泄漏零内存膨胀）")
 
-        // 安全清理渲染临时缓存与空闲页（绝不破坏 NanoZone / TinyZone 元数据）
+        // 释放临时渲染脏缓存与大块空闲页
         MemoryReclaim.performDeepPurge()
     }
 
@@ -577,6 +573,11 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     func zoomWindow() {
+        // 核心防抖：0.35s 内防连击，彻底杜绝快速连续触发导致放大后又被撤回！
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastZoomTime > 0.35 else { return }
+        lastZoomTime = now
+
         guard let win = window else { return }
         guard let screen = win.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
@@ -688,7 +689,6 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded { onClose() })
             .help("关闭窗口 (⌘W)")
 
             // 黄色最小化按钮
@@ -708,7 +708,6 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded { onMinimize() })
             .help("最小化 (⌘M)")
 
             // 绿色缩放/最大化按钮
@@ -728,7 +727,6 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture().onEnded { onZoom() })
             .help("全屏 / 满屏铺满")
         }
         .padding(.vertical, 4)

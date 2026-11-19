@@ -4,7 +4,7 @@ import CoreAudio
 import Foundation
 
 /// 当前录音会话的物理触发来源（用于「智能随动」无冲突选通麦克风）
-enum SessionTriggerSource: String, CaseIterable {
+enum SessionTriggerSource: String, CaseIterable, Codable {
     case none
     case keyboard
     case remote

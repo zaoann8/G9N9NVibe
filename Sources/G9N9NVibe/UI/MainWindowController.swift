@@ -437,15 +437,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // 关键低内存优化：彻底解绑释放 NSWindow 和 SwiftUI NSHostingController 视图树
+        // 双进程架构核心：关闭主窗口即退出前台控制台进程，SwiftUI 视图树与显存 100% 归还内核
         window?.orderOut(nil)
         window?.contentViewController = nil
         window?.delegate = nil
         window = nil
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭，执行全套内核级脏页净化与深度压降")
-
-        // 调用 Darwin XNU 内核专用深度内存压降
-        MemoryReclaim.performDeepPurge()
+        AppLog.write("UI", "主窗口已关闭，前台界面进程彻底退出，后台硬件守护继续常驻")
+        DispatchQueue.main.async {
+            NSApp.terminate(nil)
+        }
     }
 }

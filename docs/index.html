@@ -889,8 +889,8 @@
           <span class="en">Chromecast Remote,<br/>Rebuilt for <span class="accent">Vibe Coding</span></span>
         </h1>
         <p class="hero-desc">
-          <span class="zh">专为 Google Chromecast (<code>G9N9N</code>) 设计的 macOS 原生硬件桥接器。支持智能双麦按源随动、3 档实时 DSP 灵敏度、语音键置顶排布、15 键短按与 8 键长按扩展，以及按前台 IDE 自动切换预设——后台常驻低至 8MB~12MB、待机零橙灯、永不常驻接管系统默认麦。</span>
-          <span class="en">A precision macOS bridge for the Google Chromecast (<code>G9N9N</code>) remote. Smart dual-mic routing, 3-step DSP gain, top-ranked Voice key, 15 tap + 8 hold bindings, and zero-polling per-app profile switching—with ultra-lean 8MB~12MB RAM and zero system mic hijacking.</span>
+          <span class="zh">专为 Google Chromecast (<code>G9N9N</code>) 设计的 macOS 原生硬件桥接器。支持智能双麦按源随动、3 档实时 DSP 灵敏度、语音键置顶排布、15 键短按与 8 键长按扩展，以及按前台 IDE 自动切换预设——开窗约 30MB、后台常驻仅约 15MB、待机零橙灯、永不常驻接管系统默认麦。</span>
+          <span class="en">A precision macOS bridge for the Google Chromecast (<code>G9N9N</code>) remote. Smart dual-mic routing, 3-step DSP gain, top-ranked Voice key, 15 tap + 8 hold bindings, and zero-polling per-app profile switching—with ~30MB active RAM, ~15MB background RAM and zero system mic hijacking.</span>
         </p>
 
         <div class="hero-cta">
@@ -1032,8 +1032,8 @@
     <!-- 紧凑硬件级指标带 -->
     <div class="spec-strip">
       <div class="spec-cell">
-        <div class="spec-num">8 ~ 12 MB</div>
-        <div class="spec-lbl"><span class="zh">极致常驻内存 · 关窗退还脏页</span><span class="en">Ultra-Low RAM · Auto Page Relief</span></div>
+        <div class="spec-num">~15 MB</div>
+        <div class="spec-lbl"><span class="zh">后台常驻内存 · 关窗退还脏页</span><span class="en">Background RAM · Auto Page Relief</span></div>
       </div>
       <div class="spec-cell">
         <div class="spec-num">2.7 MB</div>
@@ -1060,7 +1060,7 @@
           <div class="sec-kicker">ARCHITECTURE &amp; PERFORMANCE</div>
           <h2 class="sec-title"><span class="zh">六大硬核优势，精工而不臃肿</span><span class="en">Six Precision Engineering Highlights</span></h2>
         </div>
-        <p class="sec-sub"><span class="zh">100% 原生 Swift 与纯 C 架构，关窗即释放视图树，常驻极低后台内存。</span><span class="en">100% native Swift &amp; pure C. Releases SwiftUI view tree on close for 8MB~12MB RAM.</span></p>
+        <p class="sec-sub"><span class="zh">100% 原生 Swift 与纯 C 架构，关窗即释放视图树，后台常驻仅约 15MB。</span><span class="en">100% native Swift &amp; pure C. Releases SwiftUI view tree on close for ~15MB idle RAM.</span></p>
       </div>
 
       <div class="grid-2">
@@ -1144,11 +1144,11 @@
               </div>
               <span class="feat-idx">05 / PERFORMANCE</span>
             </div>
-            <h3><span class="zh">8MB~12MB 极致内存 · 关窗退还脏页</span><span class="en">8MB~12MB RAM · Auto Page Relief</span></h3>
-            <p><span class="zh">绝非臃肿框架或套壳工具：微光柱采用 CoreGraphics 单层 Canvas 批量极速渲染，120Hz 满血高刷且 0 堆对象分配；关窗主动调用 <code>malloc_zone_pressure_relief</code> 退还脏页，常驻仅 8MB~12MB。</span><span class="en">Zero bloatware: CoreGraphics Canvas draws audio meters with zero heap allocation at 120Hz. Calls malloc_zone_pressure_relief on close for 8MB~12MB background RAM.</span></p>
+            <h3><span class="zh">开窗 ~30MB · 关窗常驻仅 ~15MB</span><span class="en">~30MB Active · ~15MB Idle RAM</span></h3>
+            <p><span class="zh">绝非臃肿框架或套壳工具：微光柱采用 CoreGraphics 单层 Canvas 批量极速渲染，120Hz 满血高刷且 0 堆对象分配；前台开窗仅约 30MB，关窗主动销毁视图树并调用 <code>malloc_zone_pressure_relief</code> 退还脏页，后台常驻仅约 15MB（相比 Electron 类工具减少 90% 以上）。</span><span class="en">Zero bloatware: CoreGraphics Canvas draws audio meters with zero heap allocation at 120Hz. ~30MB active footprint, releases view tree and calls malloc_zone_pressure_relief on close for ~15MB background RAM.</span></p>
           </div>
           <div class="feat-tags">
-            <span class="feat-tag">8MB~12MB Idle RAM</span>
+            <span class="feat-tag">~15MB Idle RAM</span>
             <span class="feat-tag">Canvas Batch Draw</span>
             <span class="feat-tag">Zero Heap Allocation</span>
           </div>

@@ -9,10 +9,11 @@
 
 ## 🌟 为什么选择 G9NVibe？（核心优势）
 
-### 1. 🚀 极致性能：8MB ~ 12MB 常驻内存奇迹
+### 1. 🚀 原生极致轻量：开窗 ~30MB · 关窗常驻仅 ~15MB
 - **绝非 Electron / Python 包装**：100% 原生 Swift + 纯 C 自研 CoreAudio HAL 驱动，整包体积仅 **约 2.7 MB**，零第三方臃肿框架依赖。
+- **视网膜物理显存优化**：针对 960×660 视网膜屏（Retina @2x 硬件 Framebuffer 需约 20MB）深度优化，前台全屏开窗仅约 **28MB ~ 35MB**。
 - **CoreGraphics Canvas 批量高刷渲染**：声学电平微光柱采用单层 Canvas 批量极速绘制，支持 120Hz ProMotion 满血高刷且运行时 **0 堆对象分配**。
-- **关窗主动退还系统脏页**：窗口关闭时不仅彻底销毁 SwiftUI 视图树，更主动通知 macOS 内核退还分配器脏页（`malloc_zone_pressure_relief`），日常后台无感常驻仅 **8MB ~ 12MB**！
+- **关窗主动退还系统脏页**：窗口关闭常驻后台时，彻底卸载 SwiftUI 视图树并释放 20MB 显存表面，主动通知 macOS 内核退还分配器脏页（`malloc_zone_pressure_relief`），后台常驻仅约 **15MB 左右**（对比 Electron 类软件动辄 150MB~300MB，资源占用减少 90% 以上）！
 
 ### 2. 🎙️ 开箱即用 · 系统麦永不常驻接管
 - **免驱动即用**：拖进「应用程序」立即以 MacBook 内置麦 / AirPods 工作；如需蓝牙近场语音，点击「一键启用」1 秒部署内置纯 C 虚拟驱动（随时可一键无痕卸载）。
@@ -66,15 +67,6 @@
 # 3. 编译 Apple Silicon + Intel 双架构 Universal 通用 DMG
 BUILD_UNIVERSAL=1 ./Scripts/build-dmg.sh
 ```
-
-## GitHub 自动发布 DMG 与官网部署
-
-1. **仅按版本标签自动打包发布 DMG**：本仓库已内置 [`.github/workflows/release.yml`](.github/workflows/release.yml)。平时普通 `git push` 不会触发打包，只有推送 `v*` 版本标签（或手动点 Run workflow）时才会触发云端 macOS 自动跑 25 项自测、编译双架构 Universal 包并发布至 GitHub Releases：
-   ```bash
-   git tag v1.0.3
-   git push origin v1.0.3
-   ```
-2. **产品介绍官网（GitHub Pages）**：仓库内置 [`docs/index.html`](docs/index.html)。进入 GitHub 仓库 **Settings → Pages**，将 Source 设为 **Deploy from a branch → `main` / `/docs`**，保存后即可通过 <https://zaoann8.github.io/G9N9NVibe/> 访问。
 
 ---
 

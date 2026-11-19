@@ -548,14 +548,29 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             host.view.autoresizingMask = [.width, .height]
             self.hosting = host
             win.contentViewController = host
-            win.setContentSize(NSSize(width: 960, height: 660))
-            win.center()
         }
 
+        // 核心：每次唤起窗口强制确保恢复 960x660 居中呈现并置顶激活，彻底解决只显示图标不弹窗口的问题
+        let screen = win.screen ?? NSScreen.main
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let defaultWidth: CGFloat = 960
+        let defaultHeight: CGFloat = 660
+        let targetFrame: NSRect
+        if let normal = normalFrame, !isZoomed, normal.width >= 800 {
+            targetFrame = normal
+        } else {
+            let ox = screenFrame.origin.x + (screenFrame.width - defaultWidth) / 2.0
+            let oy = screenFrame.origin.y + (screenFrame.height - defaultHeight) / 2.0
+            targetFrame = NSRect(x: ox, y: oy, width: defaultWidth, height: defaultHeight)
+        }
+        win.setFrame(targetFrame, display: true)
+
+        win.level = .normal
+        win.orderFrontRegardless()
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onVisibilityChanged?(true)
-        AppLog.write("UI", "主窗口已呈现")
+        AppLog.write("UI", "主窗口已呈现 (960x660，精准居中)")
     }
 
     func closeWindow() {

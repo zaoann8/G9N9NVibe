@@ -5,6 +5,10 @@ import SwiftUI
 struct MainConsoleRootView: View {
     @ObservedObject var vm: AppViewModel
     @ObservedObject var store: RemoteMappingStore
+    var onClose: (() -> Void)? = nil
+    var onMinimize: (() -> Void)? = nil
+    var onZoom: (() -> Void)? = nil
+
     @Environment(\.colorScheme) private var systemScheme
     @State private var isUpdateHovered = false
     @State private var bannerDismissedVersion: String? = nil
@@ -94,13 +98,25 @@ struct MainConsoleRootView: View {
             // 手绘苹果原厂标准红黄绿三色交通灯按钮（彻底消灭 ThemeWidgetControlViewService）
             AppleTrafficLightsView(
                 onClose: {
-                    NSApp.keyWindow?.performClose(nil)
+                    if let onClose {
+                        onClose()
+                    } else {
+                        NSApp.keyWindow?.performClose(nil)
+                    }
                 },
                 onMinimize: {
-                    NSApp.keyWindow?.miniaturize(nil)
+                    if let onMinimize {
+                        onMinimize()
+                    } else {
+                        NSApp.keyWindow?.miniaturize(nil)
+                    }
                 },
                 onZoom: {
-                    NSApp.keyWindow?.zoom(nil)
+                    if let onZoom {
+                        onZoom()
+                    } else {
+                        NSApp.keyWindow?.zoom(nil)
+                    }
                 }
             )
             .padding(.leading, 2)
@@ -414,6 +430,44 @@ final class PurgeableHostingController: NSHostingController<AnyView> {
     }
 }
 
+/// 沉浸式无边框窗口：
+/// 重写 canBecomeKey / canBecomeMain 确保无边框样式下依然具备第一响应者键盘焦点与快捷键；
+/// 重写 performKeyEquivalent 支持全局 ⌘W 关闭与 ⌘M 最小化。
+final class KeyBorderlessWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    var closeHandler: (() -> Void)?
+    var minimizeHandler: (() -> Void)?
+    var zoomHandler: (() -> Void)?
+
+    override func performClose(_ sender: Any?) {
+        if let closeHandler {
+            closeHandler()
+        } else {
+            super.performClose(sender)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // ⌘W 关闭窗口
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" {
+            performClose(nil)
+            return true
+        }
+        // ⌘M 最小化窗口
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "m" {
+            if let minimizeHandler {
+                minimizeHandler()
+            } else {
+                miniaturize(nil)
+            }
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// 极低内存主窗口管理器：
 /// 仅在用户主动打开主窗口时创建 NSWindow + NSHostingView；
 /// 一旦用户关闭窗口，立即通过 purgeViewGraph() 彻底析构所有 SwiftUI 视图节点与闭包缓存，
@@ -421,7 +475,7 @@ final class PurgeableHostingController: NSHostingController<AnyView> {
 final class MainWindowController: NSObject, NSWindowDelegate {
     private let viewModel: AppViewModel
     private let mappingStore: RemoteMappingStore
-    private var window: NSWindow?
+    private var window: KeyBorderlessWindow?
     private var hosting: PurgeableHostingController?
 
     var onVisibilityChanged: ((Bool) -> Void)?
@@ -444,14 +498,26 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        let rootView = MainConsoleRootView(vm: viewModel, store: mappingStore)
+        let rootView = MainConsoleRootView(
+            vm: viewModel,
+            store: mappingStore,
+            onClose: { [weak self] in
+                self?.closeWindow()
+            },
+            onMinimize: { [weak self] in
+                self?.minimizeWindow()
+            },
+            onZoom: { [weak self] in
+                self?.zoomWindow()
+            }
+        )
         let host = PurgeableHostingController(root: rootView)
         host.preferredContentSize = NSSize(width: 960, height: 660)
         self.hosting = host
 
-        let win = NSWindow(
+        let win = KeyBorderlessWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
@@ -466,6 +532,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.setContentSize(NSSize(width: 960, height: 660))
         win.minSize = NSSize(width: 840, height: 600)
         win.delegate = self
+        win.closeHandler = { [weak self] in
+            self?.closeWindow()
+        }
+        win.minimizeHandler = { [weak self] in
+            self?.minimizeWindow()
+        }
+        win.zoomHandler = { [weak self] in
+            self?.zoomWindow()
+        }
         win.center()
 
         self.window = win
@@ -475,19 +550,49 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         AppLog.write("UI", "主窗口已按需创建")
     }
 
-    func windowWillClose(_ notification: Notification) {
-        // 方案 C 核心：关窗时彻底析构 SwiftUI 视图树，单进程纯净常驻
-        window?.orderOut(nil)
+    func closeWindow() {
+        guard let win = window else { return }
+        win.orderOut(nil)
         hosting?.purgeViewGraph()
         hosting = nil
-        window?.contentViewController = nil
-        window?.delegate = nil
-        window = nil
+        win.contentViewController = nil
+        win.delegate = nil
+        self.window = nil
         onVisibilityChanged?(false)
         AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并执行内核深度内存回收")
 
         // 调用 Darwin XNU 内核专用深度内存压降
         MemoryReclaim.performDeepPurge()
+    }
+
+    func minimizeWindow() {
+        window?.miniaturize(nil)
+    }
+
+    func zoomWindow() {
+        guard let win = window else { return }
+        if win.frame.width > 970 {
+            // 还原至标准尺寸
+            let origin = win.frame.origin
+            let target = NSRect(x: origin.x, y: origin.y, width: 960, height: 660)
+            win.setFrame(target, display: true, animate: true)
+        } else {
+            // 缩放放大至适度舒适尺寸
+            if let screen = win.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+                let target = NSRect(
+                    x: max(visible.origin.x + 20, (visible.width - 1100) / 2 + visible.origin.x),
+                    y: max(visible.origin.y + 20, (visible.height - 760) / 2 + visible.origin.y),
+                    width: min(1100, visible.width - 40),
+                    height: min(760, visible.height - 40)
+                )
+                win.setFrame(target, display: true, animate: true)
+            }
+        }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        closeWindow()
     }
 }
 
@@ -519,6 +624,7 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded { onClose() })
             .help("关闭窗口 (⌘W)")
 
             // 黄色最小化按钮
@@ -538,7 +644,8 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .help("最小化")
+            .simultaneousGesture(TapGesture().onEnded { onMinimize() })
+            .help("最小化 (⌘M)")
 
             // 绿色适度缩放按钮
             Button(action: onZoom) {
@@ -557,10 +664,12 @@ struct AppleTrafficLightsView: View {
                 .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(TapGesture().onEnded { onZoom() })
             .help("缩放窗口")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 2)
         .onHover { isHovered = $0 }
+        .allowsHitTesting(true)
     }
 }

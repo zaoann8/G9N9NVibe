@@ -495,76 +495,88 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     func showWindow() {
         viewModel.refreshPermissions()
 
+        let win: KeyBorderlessWindow
         if let existing = window {
-            existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            onVisibilityChanged?(true)
-            return
-        }
-
-        let rootView = MainConsoleRootView(
-            vm: viewModel,
-            store: mappingStore,
-            onClose: { [weak self] in
+            win = existing
+        } else {
+            win = KeyBorderlessWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
+                styleMask: [.borderless, .resizable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            win.title = "G9NVibe"
+            win.isOpaque = false
+            win.backgroundColor = .clear
+            win.hasShadow = true
+            win.isMovableByWindowBackground = true
+            win.isReleasedWhenClosed = false
+            win.collectionBehavior = [.fullScreenPrimary, .fullScreenAuxiliary]
+            win.minSize = NSSize(width: 840, height: 600)
+            win.delegate = self
+            win.closeHandler = { [weak self] in
                 self?.closeWindow()
-            },
-            onMinimize: { [weak self] in
+            }
+            win.minimizeHandler = { [weak self] in
                 self?.minimizeWindow()
-            },
-            onZoom: { [weak self] in
+            }
+            win.zoomHandler = { [weak self] in
                 self?.zoomWindow()
             }
-        )
-        let host = PurgeableHostingController(root: rootView)
-        if #available(macOS 13.0, *) {
-            host.sizingOptions = [] // 核心：禁用 NSHostingController 对窗口尺寸的反向约束，彻底解决放大后被弹回原样的问题
+            self.window = win
         }
-        host.view.autoresizingMask = [.width, .height]
-        self.hosting = host
 
-        let win = KeyBorderlessWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
-            styleMask: [.borderless, .resizable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        win.title = "G9NVibe"
-        win.isOpaque = false
-        win.backgroundColor = .clear
-        win.hasShadow = true
-        win.isMovableByWindowBackground = true
-        win.isReleasedWhenClosed = false
-        win.collectionBehavior = [.fullScreenPrimary, .fullScreenAuxiliary]
-        win.contentViewController = host
-        win.setContentSize(NSSize(width: 960, height: 660))
-        win.minSize = NSSize(width: 840, height: 600)
-        win.delegate = self
-        win.closeHandler = { [weak self] in
-            self?.closeWindow()
+        // 如果 hosting 为空（此前关窗卸载了），则按需重新构建轻量视图并重设标准尺寸
+        if hosting == nil {
+            let rootView = MainConsoleRootView(
+                vm: viewModel,
+                store: mappingStore,
+                onClose: { [weak self] in
+                    self?.closeWindow()
+                },
+                onMinimize: { [weak self] in
+                    self?.minimizeWindow()
+                },
+                onZoom: { [weak self] in
+                    self?.zoomWindow()
+                }
+            )
+            let host = PurgeableHostingController(root: rootView)
+            if #available(macOS 13.0, *) {
+                host.sizingOptions = [] // 核心：禁用 NSHostingController 对窗口尺寸的反向约束
+            }
+            host.view.autoresizingMask = [.width, .height]
+            self.hosting = host
+            win.contentViewController = host
+            win.setContentSize(NSSize(width: 960, height: 660))
+            win.center()
         }
-        win.minimizeHandler = { [weak self] in
-            self?.minimizeWindow()
-        }
-        win.zoomHandler = { [weak self] in
-            self?.zoomWindow()
-        }
-        win.center()
 
-        self.window = win
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         onVisibilityChanged?(true)
-        AppLog.write("UI", "主窗口已按需创建")
+        AppLog.write("UI", "主窗口已呈现")
     }
 
     func closeWindow() {
         guard let win = window else { return }
-        // 核心：单例复用，隐藏窗口而不重复销毁重建，彻底杜绝内存越滚越大涨到 48M 的问题！
+        // 1. 立即隐藏窗口
         win.orderOut(nil)
-        onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已隐藏（单例保持复用，零泄漏零内存膨胀）")
 
-        // 释放临时渲染脏缓存与大块空闲页
+        // 2. 核心：彻底析构 SwiftUI 视图图谱与托管控制器，释放全部状态节点与闭包引用
+        hosting?.purgeViewGraph()
+        hosting = nil
+        win.contentViewController = nil
+
+        // 3. 核心杀招：将 Window 物理尺寸重置为极小，逼迫 CoreAnimation 彻底销毁 24MB 的超大满屏 Framebuffer 显存纹理！
+        isZoomed = false
+        win.setFrame(NSRect(x: 0, y: 0, width: 100, height: 100), display: false)
+
+        // 4. 通知状态变化（保持 Dock 栏常驻与蓝牙监听）
+        onVisibilityChanged?(false)
+        AppLog.write("UI", "主窗口已关闭：已深度剥离满屏帧缓冲与 SwiftUI 视图树")
+
+        // 5. 立即执行深层内存回收（清理 CoreAnimation / Malloc 大块空闲页）
         MemoryReclaim.performDeepPurge()
     }
 

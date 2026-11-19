@@ -28,6 +28,8 @@
     <string>12.0</string>
     <key>LSUIElement</key>
     <false/>
+    <key>MallocNanoZone</key>
+    <false/>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>G9NVibe 需要蓝牙权限连接 Google Chromecast (G9N9N) 遥控器并接收语音按键与电量信号。</string>
     <key>NSMicrophoneUsageDescription</key>

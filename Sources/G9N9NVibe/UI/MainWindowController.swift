@@ -75,6 +75,11 @@ struct MainConsoleRootView: View {
         }
         .frame(minWidth: 840, idealWidth: 960, minHeight: 600, idealHeight: 660)
         .background(palette.windowBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(palette.borderSoft, lineWidth: 1)
+        )
         .preferredColorScheme(vm.themePreference == .system ? nil : (vm.themePreference == .dark ? .dark : .light))
         .sheet(isPresented: $vm.showOnboarding) {
             OnboardingView(vm: vm, palette: palette)
@@ -85,13 +90,27 @@ struct MainConsoleRootView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
+            // 手绘苹果原厂标准红黄绿三色交通灯按钮（彻底消灭 ThemeWidgetControlViewService）
+            AppleTrafficLightsView(
+                onClose: {
+                    NSApp.keyWindow?.performClose(nil)
+                },
+                onMinimize: {
+                    NSApp.keyWindow?.miniaturize(nil)
+                },
+                onZoom: {
+                    NSApp.keyWindow?.zoom(nil)
+                }
+            )
+            .padding(.leading, 2)
+
             HStack(spacing: 8) {
                 if let appIcon = NSApp.applicationIconImage {
                     Image(nsImage: appIcon)
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 26, height: 26)
                 } else {
                     ZStack {
                         RoundedRectangle(cornerRadius: 7)
@@ -106,7 +125,7 @@ struct MainConsoleRootView: View {
                     .font(VibeFont.brand(15))
                     .tracking(0.2)
                     .foregroundColor(palette.ink1)
-                // 清晰可识别的手动检查更新 / 新版升级按钮胶囊（带刷新图标、独立边框与悬停反馈）
+                // 清晰可识别的手动检查更新 / 新版升级按钮胶囊
                 Button {
                     vm.openUpdateDialog()
                 } label: {
@@ -432,13 +451,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
         win.title = "G9NVibe"
-        win.titleVisibility = .hidden
-        win.titlebarAppearsTransparent = true
+        win.isOpaque = false
+        win.backgroundColor = .clear
+        win.hasShadow = true
+        win.isMovableByWindowBackground = true
         win.isReleasedWhenClosed = false
         win.collectionBehavior = [.fullScreenNone]
         win.contentViewController = host
@@ -467,5 +488,79 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
         // 调用 Darwin XNU 内核专用深度内存压降
         MemoryReclaim.performDeepPurge()
+    }
+}
+
+/// 纯手绘苹果原厂标准红黄绿三色交通灯按钮：
+/// - 彻底摆脱 AppKit 标题栏托管机制，从源头上 100% 杜绝 ThemeWidgetControlViewService！
+/// - 悬停时浮现 × / − / ⤢ 微图标，支持关闭、最小化、缩放，触感与手感与 macOS 官方一模一样。
+struct AppleTrafficLightsView: View {
+    @State private var isHovered = false
+    let onClose: () -> Void
+    let onMinimize: () -> Void
+    let onZoom: () -> Void
+
+    var body: some View {
+        HStack(spacing: 7.5) {
+            // 红色关闭按钮
+            Button(action: onClose) {
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 1.0, green: 0.36, blue: 0.33))
+                    Circle()
+                        .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+                    if isHovered {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 6.5, weight: .bold))
+                            .foregroundColor(Color.black.opacity(0.68))
+                    }
+                }
+                .frame(width: 12, height: 12)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("关闭窗口 (⌘W)")
+
+            // 黄色最小化按钮
+            Button(action: onMinimize) {
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 1.0, green: 0.74, blue: 0.18))
+                    Circle()
+                        .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+                    if isHovered {
+                        Image(systemName: "minus")
+                            .font(.system(size: 6.5, weight: .bold))
+                            .foregroundColor(Color.black.opacity(0.68))
+                    }
+                }
+                .frame(width: 12, height: 12)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("最小化")
+
+            // 绿色适度缩放按钮
+            Button(action: onZoom) {
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 0.16, green: 0.80, blue: 0.25))
+                    Circle()
+                        .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
+                    if isHovered {
+                        Image(systemName: "arrow.up.left.and.down.right.and.arrow.down.right.and.up.left")
+                            .font(.system(size: 5.5, weight: .bold))
+                            .foregroundColor(Color.black.opacity(0.68))
+                    }
+                }
+                .frame(width: 12, height: 12)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("缩放窗口")
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .onHover { isHovered = $0 }
     }
 }

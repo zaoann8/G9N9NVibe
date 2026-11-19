@@ -11,7 +11,7 @@ enum MemoryReclaim {
 
     /// 执行全套深度内存净化与脏页归还系统
     static func performDeepPurge() {
-        // 1. 清理应用层基础缓存
+        // 1. 清理应用层基础网络与图片缓存
         URLCache.shared.removeAllCachedResponses()
 
         // 2. 强制刷空 CoreAnimation 事务与未提交的图层树
@@ -24,6 +24,12 @@ enum MemoryReclaim {
 
         // 4. 第二轮延时压降：待上一帧 RunLoop 完全退出后归还残余堆块
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            _ = malloc_zone_pressure_relief(nil, 0)
+            trimHeapPagesToKernel()
+        }
+
+        // 5. 第三轮深层沉淀：0.35s 后内核再次深层压降，达到极限最低常驻
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             _ = malloc_zone_pressure_relief(nil, 0)
             trimHeapPagesToKernel()
         }
@@ -50,7 +56,7 @@ enum MemoryReclaim {
                 let isWritableUserHeap = (info.protection & VM_PROT_WRITE != 0) &&
                     (info.share_mode == UInt8(SM_COW) || info.share_mode == UInt8(SM_PRIVATE)) &&
                     info.user_tag == UInt32(VM_MEMORY_MALLOC)
-                if isWritableUserHeap && size >= 65536 {
+                if isWritableUserHeap && size >= 32768 {
                     _ = madvise(UnsafeMutableRawPointer(bitPattern: address), Int(size), MADV_FREE_REUSABLE_DARWIN)
                 }
                 address += size

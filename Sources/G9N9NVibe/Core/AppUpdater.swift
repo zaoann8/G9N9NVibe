@@ -44,12 +44,12 @@ enum AppUpdateState: Equatable {
 /// G9NVibe 零第三方依赖原生自动更新引擎：
 /// - 通过 GitHub Releases API 检查 SemVer 语义化新版本（每天静默检查一次 + 随时手动检查）
 /// - 支持实时进度下载 DMG + CryptoKit SHA-256 完整性校验 + 静默 hdiutil 挂载 + codesign 验包
-/// - 支持无损 TCC 权限保留的原子级覆盖替换（失败自动回滚旧包）+ 清除 quarantine 隔离标记 + 自动重启
+/// - 支持无损 TCC 权限保留的安全静默升级（失败自动回滚旧包）+ 清除 quarantine 隔离标记 + 自动重启
 final class AppUpdater: NSObject, URLSessionDownloadDelegate {
     static let shared = AppUpdater()
 
     var onStateChanged: ((AppUpdateState) -> Void)?
-    /// 即将重启应用以完成原子覆盖前回调（由 AppController 执行安全退出与系统麦还原）
+    /// 即将重启应用以完成静默更新前回调（由 AppController 执行安全退出与系统麦还原）
     var onWillTerminateForUpdate: (() -> Void)?
 
     private(set) var state: AppUpdateState = .idle {
@@ -230,7 +230,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         }.resume()
     }
 
-    // MARK: - 下载、校验与原子覆盖安装
+    // MARK: - 下载、校验与安全静默安装
 
     func startDownloadAndInstall(_ info: ReleaseUpdateInfo) {
         guard !state.isBusy else { return }
@@ -385,7 +385,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
             return
         }
 
-        // 4. 启动脱离式原子覆盖 + 失败自动回滚 + 自动重启脚本
+        // 4. 启动脱离式安全覆盖替换 + 失败自动回滚 + 自动重启脚本
         state = .installing(info)
         let targetApp = Self.resolveInstallTargetURL()
         let parentDir = targetApp.deletingLastPathComponent()
@@ -398,10 +398,19 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
                 tempDir: tempDir,
                 needsPrivilege: needsPrivilege
             )
-            AppLog.write("UPDATE", "已派发原子覆盖安装脚本 -> \(targetApp.path)，主程序即将安全退出并重启")
+            AppLog.write("UPDATE", "已派发安全覆盖更新脚本 -> \(targetApp.path)，主程序即将安全退出并重启")
             DispatchQueue.main.async { [weak self] in
                 self?.onWillTerminateForUpdate?()
+                // 彻底关闭并隐藏所有窗口，避免残留更新弹窗或阻碍进程退出
+                for window in NSApp.windows {
+                    window.orderOut(nil)
+                    window.close()
+                }
                 NSApp.terminate(nil)
+                // 延时 0.15 秒兜底强退，确保旧进程彻底退出，绝不留存双实例
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    exit(0)
+                }
             }
         } catch {
             failAndCleanup("启动覆盖安装失败：\(error.localizedDescription)")
@@ -420,7 +429,7 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         let newSlotPath = "\(parentDir)/.G9NVibe.new-\(pid).app"
         let scriptURL = tempDir.appendingPathComponent("apply-update.sh")
 
-        // 脱离子进程脚本：等待旧 PID 退出 -> 复制到同分区临时槽 -> 原子切换（失败自动回滚）-> 重启新版
+        // 脱离子进程脚本：等待旧 PID 退出（超时强杀）-> 复制到同分区临时槽 -> 安全切换（失败自动回滚）-> 重启新版
         let coreBody = """
         set -e
         TARGET=\(shellQuote(targetApp.path))
@@ -429,18 +438,24 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
         NEWSLOT=\(shellQuote(newSlotPath))
         TMPDIR=\(shellQuote(tempDir.path))
 
-        # 1. 等待旧主进程完全退出（最长 6 秒）
-        for _ in {1..30}; do
+        # 1. 优先等待旧主进程优雅退出（最多等 2 秒）
+        for _ in {1..20}; do
           if ! kill -0 \(pid) 2>/dev/null; then break; fi
-          sleep 0.2
+          sleep 0.1
         done
 
-        # 2. 先拷贝到同分区新槽位并清隔离标记，确保后续 mv 为纯原子操作
+        # 若旧主进程未及时退出，坚决强制终止旧主进程，防止多开两个 App 或两个窗口
+        if kill -0 \(pid) 2>/dev/null; then
+          kill -9 \(pid) 2>/dev/null || true
+          sleep 0.2
+        fi
+
+        # 2. 先拷贝到同分区新槽位并清隔离标记，确保后续 mv 为瞬时原子操作
         rm -rf "$NEWSLOT" "$BACKUP"
         /usr/bin/ditto "$STAGED" "$NEWSLOT"
         /usr/bin/xattr -cr "$NEWSLOT" || true
 
-        # 3. 原子替换并在任何异常时立即无损回滚旧版本
+        # 3. 安全替换并在任何异常时立即无损回滚旧版本
         if [ -d "$TARGET" ]; then
           mv "$TARGET" "$BACKUP"
         fi
@@ -451,9 +466,9 @@ final class AppUpdater: NSObject, URLSessionDownloadDelegate {
           exit 1
         fi
 
-        # 4. 清理备份与临时目录，自动重启全新版本
+        # 4. 清理备份与临时目录，标准唤起启动全新版本（去除 -n 参数，严格维持单实例）
         rm -rf "$BACKUP" "$TMPDIR"
-        /usr/bin/open -n "$TARGET"
+        /usr/bin/open "$TARGET"
         """
 
         try ("#!/bin/zsh\n" + coreBody + "\n").write(to: scriptURL, atomically: true, encoding: .utf8)

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 原生软件更新弹窗：展示版本对比、更新说明、实时下载进度、原子覆盖升级与手动下载兜底
+/// 原生软件更新弹窗：展示版本对比、更新说明、实时下载进度、静默无损升级与手动下载兜底
 struct UpdateSheetView: View {
     @ObservedObject var vm: AppViewModel
     let palette: VibePalette
@@ -137,7 +137,7 @@ struct UpdateSheetView: View {
             releaseInfoCard(info, statusLine: vm.t("正在校验 SHA-256 哈希与代码签名完整性…", "Verifying SHA-256 & code signature…"), progress: nil)
 
         case .installing(let info):
-            releaseInfoCard(info, statusLine: vm.t("校验通过，正在原子覆盖安装并自动重启…", "Verified. Installing atomically and relaunching…"), progress: 1.0)
+            releaseInfoCard(info, statusLine: vm.t("校验通过，正在安装新版本并自动重启…", "Verified. Installing update and relaunching…"), progress: 1.0)
         }
     }
 
@@ -188,8 +188,8 @@ struct UpdateSheetView: View {
                 .padding(.top, 2)
             } else {
                 Text(vm.t(
-                    "将自动下载 DMG、校验 SHA-256、安全还原系统麦后原子覆盖安装（失败自动回滚旧版）并自动重启。",
-                    "Downloads DMG, verifies SHA-256, atomically replaces the app (auto-rollback on failure), and relaunches."
+                    "将自动下载安装包、校验 SHA-256、安全还原系统麦后完成静默安装（保留全部权限）并自动重启。",
+                    "Downloads update, verifies SHA-256, safely installs while keeping all permissions, and relaunches."
                 ))
                 .font(VibeFont.caption(11))
                 .foregroundColor(palette.ink3)

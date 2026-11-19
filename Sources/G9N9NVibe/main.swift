@@ -23,6 +23,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         AppLog.setup()
         AppLog.write("APP", "G9N9N-Vibe \(AppStorage.appVersionString) 启动")
 
+        // 0. 单实例单进程守护：若已有相同 Bundle ID 实例在运行，直接激活已有窗口并退出当前重复进程
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        let bundleID = Bundle.main.bundleIdentifier ?? "io.github.g9n9n-vibe"
+        let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if let existing = runningApps.first(where: { $0.processIdentifier != currentPID }) {
+            AppLog.write("APP", "检测到已有 G9NVibe 实例在运行 (PID: \(existing.processIdentifier))，激活已有窗口并退出当前冗余进程")
+            existing.activate(options: [.activateIgnoringOtherApps])
+            exit(0)
+        }
+
         LaunchAtLogin.repairIfStale()
         setupMainMenu()
         setupSignalSafetyNet()

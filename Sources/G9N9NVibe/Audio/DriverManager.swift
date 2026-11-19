@@ -74,26 +74,27 @@ final class DriverManager {
 
         let src = shellQuote(sourceURL.path)
         let dst = shellQuote(Self.installedDriverPath)
-        let script = """
-        mkdir -p /Library/Audio/Plug-Ins/HAL && \
-        rm -rf \(dst) && \
-        ditto \(src) \(dst) && \
-        chown -R root:wheel \(dst) && \
-        chmod -R 755 \(dst) && \
-        launchctl kickstart -kp system/com.apple.audio.coreaudiod
-        """
+        // 采用严格单行 && 连接，彻底消除多行字符串换行与反斜杠转义在 AppleScript 上的兼容性隐患
+        let script = [
+            "mkdir -p /Library/Audio/Plug-Ins/HAL",
+            "rm -rf \(dst)",
+            "ditto \(src) \(dst)",
+            "chown -R root:wheel \(dst)",
+            "chmod -R 755 \(dst)",
+            "launchctl kickstart -kp system/com.apple.audio.coreaudiod"
+        ].joined(separator: " && ")
 
         runPrivilegedShell(script) { [weak self] result in
             switch result {
             case .failure(let err):
                 completion(.failure(err))
             case .success:
-                // coreaudiod 重启约需 0.5~1.5 秒，指数退避轮询确认设备上线
-                self?.waitForDriverOnline(remainingAttempts: 12) { online in
+                // coreaudiod 重启约需 0.5~1.5 秒，提供多达 16 次（约 4.8 秒）轮询重试，从容应对高负载
+                self?.waitForDriverOnline(remainingAttempts: 16) { online in
                     if online {
                         completion(.success(()))
                     } else {
-                        completion(.failure(BridgeError.protocolFailure("驱动已拷贝但核心音频服务尚未刷出设备，请稍候片刻再试")))
+                        completion(.failure(BridgeError.protocolFailure("驱动已部署，但核心音频服务尚未刷出虚拟声卡设备，请稍候片刻再试")))
                     }
                 }
             }
@@ -106,10 +107,7 @@ final class DriverManager {
         MicRouteCoordinator.restoreOriginalInputDevice(force: true)
 
         let dst = shellQuote(Self.installedDriverPath)
-        let script = """
-        rm -rf \(dst) && \
-        launchctl kickstart -kp system/com.apple.audio.coreaudiod
-        """
+        let script = "rm -rf \(dst) && launchctl kickstart -kp system/com.apple.audio.coreaudiod"
 
         runPrivilegedShell(script) { result in
             switch result {

@@ -25,7 +25,7 @@ jobs:
 
       - name: Resolve release version
         id: meta
-        shell: zsh
+        shell: bash
         run: |
           set -euo pipefail
           if [[ -n "${{ inputs.version }}" ]]; then
@@ -46,13 +46,13 @@ jobs:
           echo "Resolved version: ${VER} (tag: ${TAG}, repo: ${GITHUB_REPOSITORY})"
 
       - name: Run automated self-tests (Protocol + 22 Core Cases)
-        shell: zsh
+        shell: bash
         run: |
           chmod +x Scripts/*.sh DriverSource/build-driver.sh
           ./Scripts/run-self-tests.sh
 
       - name: Build Universal App & Package DMG (Apple Silicon + Intel)
-        shell: zsh
+        shell: bash
         env:
           BUILD_UNIVERSAL: "1"
         run: |

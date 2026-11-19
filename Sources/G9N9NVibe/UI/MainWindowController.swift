@@ -77,7 +77,7 @@ struct MainConsoleRootView: View {
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.82), value: vm.toastMessage)
         }
-        .frame(minWidth: 840, idealWidth: 960, minHeight: 600, idealHeight: 660)
+        .frame(minWidth: 840, idealWidth: 960, maxWidth: .infinity, minHeight: 600, idealHeight: 660, maxHeight: .infinity)
         .background(palette.windowBg)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -477,6 +477,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private let mappingStore: RemoteMappingStore
     private var window: KeyBorderlessWindow?
     private var hosting: PurgeableHostingController?
+    private var isZoomed = false
+    private var normalFrame: NSRect?
 
     var onVisibilityChanged: ((Bool) -> Void)?
 
@@ -558,11 +560,20 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.contentViewController = nil
         win.delegate = nil
         self.window = nil
+        isZoomed = false
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并执行内核深度内存回收")
+        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并安排多轮内核深度内存回收")
 
-        // 调用 Darwin XNU 内核专用深度内存压降
+        // 立即第一轮快速释放
         MemoryReclaim.performDeepPurge()
+
+        // 待主线程当前事件循环 RunLoop 完全退出、AutoreleasePool 彻底清空后，安排延迟两轮深度内存归还
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            MemoryReclaim.performDeepPurge()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            MemoryReclaim.performDeepPurge()
+        }
     }
 
     func minimizeWindow() {
@@ -571,23 +582,31 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func zoomWindow() {
         guard let win = window else { return }
-        if win.frame.width > 970 {
-            // 还原至标准尺寸
-            let origin = win.frame.origin
-            let target = NSRect(x: origin.x, y: origin.y, width: 960, height: 660)
+        guard let screen = win.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+
+        if isZoomed {
+            // 还原至标准尺寸（若有记录用记录值，否则居中 960x660）
+            let target = normalFrame ?? NSRect(
+                x: visible.origin.x + (visible.width - 960) / 2,
+                y: visible.origin.y + (visible.height - 660) / 2,
+                width: 960,
+                height: 660
+            )
+            isZoomed = false
             win.setFrame(target, display: true, animate: true)
         } else {
-            // 缩放放大至适度舒适尺寸
-            if let screen = win.screen ?? NSScreen.main {
-                let visible = screen.visibleFrame
-                let target = NSRect(
-                    x: max(visible.origin.x + 20, (visible.width - 1100) / 2 + visible.origin.x),
-                    y: max(visible.origin.y + 20, (visible.height - 760) / 2 + visible.origin.y),
-                    width: min(1100, visible.width - 40),
-                    height: min(760, visible.height - 40)
-                )
-                win.setFrame(target, display: true, animate: true)
-            }
+            // 保存当前位置以便下一次精准还原
+            normalFrame = win.frame
+            // 放大至屏幕舒适最大化（四周留出 20pt 呼吸边距）
+            let target = NSRect(
+                x: visible.origin.x + 20,
+                y: visible.origin.y + 20,
+                width: max(840, visible.width - 40),
+                height: max(600, visible.height - 40)
+            )
+            isZoomed = true
+            win.setFrame(target, display: true, animate: true)
         }
     }
 
@@ -596,9 +615,37 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 }
 
+/// 苹果原厂全屏 / 缩放对角双三角形图标（1:1 像素级还原 macOS 原生交通灯）
+struct AppleFullScreenIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        let gap: CGFloat = 1.15
+
+        // 左上直角三角形（直角在左上）
+        var top = Path()
+        top.move(to: CGPoint(x: 0, y: 0))
+        top.addLine(to: CGPoint(x: w - gap, y: 0))
+        top.addLine(to: CGPoint(x: 0, y: h - gap))
+        top.closeSubpath()
+
+        // 右下直角三角形（直角在右下）
+        var bot = Path()
+        bot.move(to: CGPoint(x: gap, y: h))
+        bot.addLine(to: CGPoint(x: w, y: gap))
+        bot.addLine(to: CGPoint(x: w, y: h))
+        bot.closeSubpath()
+
+        path.addPath(top)
+        path.addPath(bot)
+        return path
+    }
+}
+
 /// 纯手绘苹果原厂标准红黄绿三色交通灯按钮：
 /// - 彻底摆脱 AppKit 标题栏托管机制，从源头上 100% 杜绝 ThemeWidgetControlViewService！
-/// - 悬停时浮现 × / − / ⤢ 微图标，支持关闭、最小化、缩放，触感与手感与 macOS 官方一模一样。
+/// - 悬停时浮现苹果官方质感微图标（酒红 ×、暗黄 −、墨绿全屏双三角），触感手感与 macOS 官方一模一样。
 struct AppleTrafficLightsView: View {
     @State private var isHovered = false
     let onClose: () -> Void
@@ -617,7 +664,7 @@ struct AppleTrafficLightsView: View {
                     if isHovered {
                         Image(systemName: "xmark")
                             .font(.system(size: 6.5, weight: .bold))
-                            .foregroundColor(Color.black.opacity(0.68))
+                            .foregroundColor(Color(red: 0.46, green: 0.05, blue: 0.05))
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -637,7 +684,7 @@ struct AppleTrafficLightsView: View {
                     if isHovered {
                         Image(systemName: "minus")
                             .font(.system(size: 6.5, weight: .bold))
-                            .foregroundColor(Color.black.opacity(0.68))
+                            .foregroundColor(Color(red: 0.52, green: 0.30, blue: 0.04))
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -647,7 +694,7 @@ struct AppleTrafficLightsView: View {
             .simultaneousGesture(TapGesture().onEnded { onMinimize() })
             .help("最小化 (⌘M)")
 
-            // 绿色适度缩放按钮
+            // 绿色缩放/最大化按钮
             Button(action: onZoom) {
                 ZStack {
                     Circle()
@@ -655,9 +702,9 @@ struct AppleTrafficLightsView: View {
                     Circle()
                         .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
                     if isHovered {
-                        Image(systemName: "arrow.up.left.and.down.right.and.arrow.down.right.and.up.left")
-                            .font(.system(size: 5.5, weight: .bold))
-                            .foregroundColor(Color.black.opacity(0.68))
+                        AppleFullScreenIconShape()
+                            .fill(Color(red: 0.04, green: 0.35, blue: 0.08))
+                            .frame(width: 6, height: 6)
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -665,7 +712,7 @@ struct AppleTrafficLightsView: View {
             }
             .buttonStyle(.plain)
             .simultaneousGesture(TapGesture().onEnded { onZoom() })
-            .help("缩放窗口")
+            .help("缩放窗口 / 舒适最大化")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 2)

@@ -145,42 +145,77 @@ struct VibePalette {
     }
 }
 
-/// 40 根极细声学微光柱电平表（支持随窗口大小自适应弹性柱高）
-struct MicroLevelMeterView: View {
+/// 40 根极细声学微光柱电平表（纯 CoreGraphics 2D 极轻量原生绘制，0 堆分配，绝不拉起 Metal 100MB 显存池）
+struct MicroLevelMeterView: NSViewRepresentable {
     let db: Double
     let isRemoteStyle: Bool
     let palette: VibePalette
     var barHeight: CGFloat = 13
 
+    func makeNSView(context: Context) -> LevelMeterNSView {
+        let view = LevelMeterNSView()
+        updateNSView(view, context: context)
+        return view
+    }
+
+    func updateNSView(_ nsView: LevelMeterNSView, context: Context) {
+        nsView.barHeight = barHeight
+        nsView.isRemoteStyle = isRemoteStyle
+        nsView.idleColor = NSColor(palette.meterIdle)
+        nsView.amberColor = NSColor(palette.amber)
+        nsView.activeColor = NSColor(isRemoteStyle ? palette.brand : palette.macGreen)
+        nsView.updateLevel(db: db)
+    }
+}
+
+final class LevelMeterNSView: NSView {
+    var barHeight: CGFloat = 13
+    var isRemoteStyle: Bool = false
+    var idleColor: NSColor = .lightGray
+    var amberColor: NSColor = .systemOrange
+    var activeColor: NSColor = .systemGreen
+    private var litCount: Int = 0
     private let barCount = 40
 
-    private var normalizedLevel: Double {
-        guard db > -56 else { return 0 }
-        // 针对 MacBook 内置麦日常人声区间（-54 dB ~ -6 dB）标定，说话时微光柱灵动饱满
-        return min(1.0, max(0.0, (db + 54.0) / 48.0))
-    }
+    override var isOpaque: Bool { false }
 
-    var body: some View {
-        let lit = Int((normalizedLevel * Double(barCount)).rounded())
-        Canvas { context, size in
-            let spacing: CGFloat = 2.5
-            let totalSpacing = spacing * CGFloat(barCount - 1)
-            let barWidth = max(1.0, (size.width - totalSpacing) / CGFloat(barCount))
-            for index in 0..<barCount {
-                let x = CGFloat(index) * (barWidth + spacing)
-                let rect = CGRect(x: x, y: max(0, (size.height - barHeight) / 2.0), width: barWidth, height: barHeight)
-                let path = Path(roundedRect: rect, cornerRadius: 1.5)
-                context.fill(path, with: .color(color(for: index, lit: lit)))
-            }
+    func updateLevel(db: Double) {
+        let norm: Double
+        if db <= -56 {
+            norm = 0
+        } else {
+            norm = min(1.0, max(0.0, (db + 54.0) / 48.0))
         }
-        .frame(height: barHeight)
-        .animation(.easeOut(duration: 0.08), value: lit)
+        let newLit = Int((norm * Double(barCount)).rounded())
+        if newLit != litCount {
+            litCount = newLit
+            needsDisplay = true
+        }
     }
 
-    private func color(for index: Int, lit: Int) -> Color {
-        guard index < lit else { return palette.meterIdle }
-        if index > 33 { return palette.amber }
-        return isRemoteStyle ? palette.brand : palette.macGreen
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let spacing: CGFloat = 2.5
+        let totalSpacing = spacing * CGFloat(barCount - 1)
+        let barWidth = max(1.0, (bounds.width - totalSpacing) / CGFloat(barCount))
+        let y = max(0, (bounds.height - barHeight) / 2.0)
+
+        for i in 0..<barCount {
+            let x = CGFloat(i) * (barWidth + spacing)
+            let rect = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+            let path = CGPath(roundedRect: rect, cornerWidth: 1.5, cornerHeight: 1.5, transform: nil)
+            ctx.addPath(path)
+            let color: NSColor
+            if i >= litCount {
+                color = idleColor
+            } else if i > 33 {
+                color = amberColor
+            } else {
+                color = activeColor
+            }
+            ctx.setFillColor(color.cgColor)
+            ctx.fillPath()
+        }
     }
 }
 

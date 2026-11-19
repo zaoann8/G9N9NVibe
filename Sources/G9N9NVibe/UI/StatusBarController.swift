@@ -8,6 +8,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let viewModel: AppViewModel
     private var panel: NSPanel?
+    private var hosting: PurgeableHostingController?
     private var eventMonitor: Any?
 
     var onOpenMainWindow: (() -> Void)?
@@ -119,8 +120,8 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         p.delegate = self
         p.isMovableByWindowBackground = false
 
-        let hosting = NSHostingController(
-            rootView: MenuBarQuickCardView(
+        let host = PurgeableHostingController(
+            root: MenuBarQuickCardView(
                 vm: viewModel,
                 onOpenMain: { [weak self] in
                     self?.closePanel()
@@ -139,7 +140,8 @@ final class StatusBarController: NSObject, NSWindowDelegate {
                 }
             )
         )
-        p.contentViewController = hosting
+        p.contentViewController = host
+        self.hosting = host
         self.panel = p
         p.setFrame(NSRect(x: originX, y: originY, width: cardWidth, height: cardHeight), display: true)
         p.makeKeyAndOrderFront(nil)
@@ -149,6 +151,8 @@ final class StatusBarController: NSObject, NSWindowDelegate {
     func closePanel() {
         stopEventMonitor()
         panel?.orderOut(nil)
+        hosting?.purgeViewGraph()
+        hosting = nil
         panel?.contentViewController = nil
         panel?.delegate = nil
         panel = nil

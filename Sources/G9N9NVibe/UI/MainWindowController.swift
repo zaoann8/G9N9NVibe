@@ -379,13 +379,31 @@ struct MainConsoleRootView: View {
     }
 }
 
+/// 可深度解绑销毁的 SwiftUI 托管容器（关窗时置空 rootView，彻底摧毁 SwiftUI AttributeGraph 引用图）
+final class PurgeableHostingController: NSHostingController<AnyView> {
+    init<V: View>(root: V) {
+        super.init(rootView: AnyView(root))
+    }
+
+    @MainActor required dynamic init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func purgeViewGraph() {
+        self.rootView = AnyView(EmptyView())
+        self.view.removeFromSuperview()
+    }
+}
+
 /// 极低内存主窗口管理器：
 /// 仅在用户主动打开主窗口时创建 NSWindow + NSHostingView；
-/// 一旦用户关闭窗口，立即彻底释放窗口对象与整个 SwiftUI 视图树，使后台常驻内存回落至最低基线！
+/// 一旦用户关闭窗口，立即通过 purgeViewGraph() 彻底析构所有 SwiftUI 视图节点与闭包缓存，
+/// 保持单进程架构下极速秒开与极致干净的常驻内存！
 final class MainWindowController: NSObject, NSWindowDelegate {
     private let viewModel: AppViewModel
     private let mappingStore: RemoteMappingStore
     private var window: NSWindow?
+    private var hosting: PurgeableHostingController?
 
     var onVisibilityChanged: ((Bool) -> Void)?
 
@@ -408,8 +426,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         }
 
         let rootView = MainConsoleRootView(vm: viewModel, store: mappingStore)
-        let hosting = NSHostingController(rootView: rootView)
-        hosting.preferredContentSize = NSSize(width: 960, height: 660)
+        let host = PurgeableHostingController(root: rootView)
+        host.preferredContentSize = NSSize(width: 960, height: 660)
+        self.hosting = host
 
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 660),
@@ -422,7 +441,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false
         win.collectionBehavior = [.fullScreenNone]
-        win.contentViewController = hosting
+        win.contentViewController = host
         win.setContentSize(NSSize(width: 960, height: 660))
         win.minSize = NSSize(width: 840, height: 600)
         win.delegate = self
@@ -431,21 +450,22 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         self.window = win
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        // 必须在窗口真实可见（makeKeyAndOrderFront 之后）再通知绑定电平监听，避免 isVisible 误判为 false
         onVisibilityChanged?(true)
         AppLog.write("UI", "主窗口已按需创建")
     }
 
     func windowWillClose(_ notification: Notification) {
-        // 双进程架构核心：关闭主窗口即退出前台控制台进程，SwiftUI 视图树与显存 100% 归还内核
+        // 方案 C 核心：关窗时彻底析构 SwiftUI 视图树，单进程纯净常驻
         window?.orderOut(nil)
+        hosting?.purgeViewGraph()
+        hosting = nil
         window?.contentViewController = nil
         window?.delegate = nil
         window = nil
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭，前台界面进程彻底退出，后台硬件守护继续常驻")
-        DispatchQueue.main.async {
-            NSApp.terminate(nil)
-        }
+        AppLog.write("UI", "主窗口已关闭，已彻底净化视图树并执行内核深度内存回收")
+
+        // 调用 Darwin XNU 内核专用深度内存压降
+        MemoryReclaim.performDeepPurge()
     }
 }

@@ -45,7 +45,7 @@ enum LaunchAtLogin {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dict: [String: Any] = [
             "Label": label,
-            "ProgramArguments": [executable, "--daemon"],
+            "ProgramArguments": [executable],
             "RunAtLoad": true,
             "KeepAlive": false
         ]

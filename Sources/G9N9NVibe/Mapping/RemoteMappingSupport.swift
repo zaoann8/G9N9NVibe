@@ -35,7 +35,15 @@ struct G9N9NButtonDefinition: Identifiable, Hashable {
 
 enum RemoteProfiles {
     static let g9n9nButtons: [G9N9NButtonDefinition] = [
+        // 常用【语音键】置顶首行第 1 位
         .init(id: "voice", title: "语音键", englishTitle: "Voice Key", badge: "MIC", isVoiceKey: true),
+        // 其余按键完全严格按照遥控器物理位置从上到下、自左至右排列
+        .init(id: "03", title: "方向上", englishTitle: "Up", badge: "↑"),
+        .init(id: "04", title: "方向下", englishTitle: "Down", badge: "↓"),
+        .init(id: "05", title: "方向左", englishTitle: "Left", badge: "←"),
+        .init(id: "06", title: "方向右", englishTitle: "Right", badge: "→"),
+        .init(id: "07", title: "确认", englishTitle: "Select / OK", badge: "OK", supportsLongPress: true),
+        .init(id: "0B", title: "返回", englishTitle: "Back", badge: "←", supportsLongPress: true),
         .init(id: "0A", title: "Home", englishTitle: "Home", badge: "H", supportsLongPress: true),
         .init(id: "08", title: "静音", englishTitle: "Mute", badge: "M", supportsLongPress: true),
         .init(id: "0E", title: "YouTube", englishTitle: "YouTube", badge: "YT", supportsLongPress: true),
@@ -44,12 +52,6 @@ enum RemoteProfiles {
         .init(id: "11", title: "信源", englishTitle: "Input", badge: "⇄", supportsLongPress: true),
         .init(id: "0C", title: "音量 ＋", englishTitle: "Volume ＋", badge: "+"),
         .init(id: "0D", title: "音量 －", englishTitle: "Volume −", badge: "−"),
-        .init(id: "07", title: "确认", englishTitle: "Select / OK", badge: "OK", supportsLongPress: true),
-        .init(id: "0B", title: "返回", englishTitle: "Back", badge: "←", supportsLongPress: true),
-        .init(id: "03", title: "方向上", englishTitle: "Up", badge: "↑"),
-        .init(id: "04", title: "方向下", englishTitle: "Down", badge: "↓"),
-        .init(id: "05", title: "方向左", englishTitle: "Left", badge: "←"),
-        .init(id: "06", title: "方向右", englishTitle: "Right", badge: "→"),
     ]
 }
 

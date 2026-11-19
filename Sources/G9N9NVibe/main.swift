@@ -532,7 +532,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             bleBridge.onLevel = { [weak self] db in self?.viewModel.remoteLevelDb = db }
             syncPreviewMonitoring()
         } else {
+            // 关窗退后台核心熔断：强制收敛所有录音会话，物理麦瞬关，系统橙色麦克风图标 0ms 熄灭
             stopTestSpeak(sendStopShortcut: true)
+            sessionCoordinator.stopAndReleaseAll()
+            AudioPipe.shared.setSessionActive(false, triggerSource: .none)
             AudioPipe.shared.setUIPreviewEnabled(false)
             AudioPipe.shared.onMacLevel = nil
             AudioPipe.shared.onOutputLevel = nil
@@ -540,6 +543,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             viewModel.macLevelDb = -120
             viewModel.outputLevelDb = -120
             viewModel.remoteLevelDb = -120
+
+            // 深度内存清理：强制内核分配器归还所有脏页
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                malloc_zone_pressure_relief(nil, 0)
+            }
         }
     }
 

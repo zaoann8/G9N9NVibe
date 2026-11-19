@@ -38,6 +38,7 @@ final class VoiceSessionCoordinator {
     private static let holdThreshold: TimeInterval = 0.55
     private static let openTimeout: TimeInterval = 1.1
     private static let closeTimeout: TimeInterval = 1.0
+    private static let maxAutoSafetyTimeout: TimeInterval = 60.0 // 防后台永久亮橙灯最大单次保护时长
 
     private let audioState: any AudioStateProviding
     private let setAudioSessionActive: (Bool, SessionTriggerSource) -> Void
@@ -54,6 +55,7 @@ final class VoiceSessionCoordinator {
     private var recognitionWasOpenAtPress = false
     private var openTimeoutWork: DispatchWorkItem?
     private var closeTimeoutWork: DispatchWorkItem?
+    private var safetyTimeoutWork: DispatchWorkItem?
 
     var onRequestOpenRemoteMic: (() -> RemoteMicrophoneOpenResult)?
     var onRequestCloseRemoteMic: (() -> Void)?
@@ -245,6 +247,7 @@ final class VoiceSessionCoordinator {
         if isCompatibilityMode {
             phase = .open
             publishCurrentStatus()
+            scheduleSafetyAutoClose()
             return
         }
 
@@ -257,6 +260,7 @@ final class VoiceSessionCoordinator {
             if snap.isRecording {
                 self.phase = .open
                 self.publishCurrentStatus()
+                self.scheduleSafetyAutoClose()
             } else {
                 AppLog.write("VOICE-SESSION", "开麦确认超时，自动收敛关闭（请检查触发键是否与输入法一致）")
                 self.finishClosing()
@@ -304,6 +308,19 @@ final class VoiceSessionCoordinator {
         openTimeoutWork = nil
         closeTimeoutWork?.cancel()
         closeTimeoutWork = nil
+        safetyTimeoutWork?.cancel()
+        safetyTimeoutWork = nil
+    }
+
+    private func scheduleSafetyAutoClose() {
+        safetyTimeoutWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.phase == .open else { return }
+            AppLog.write("VOICE-SESSION", "短按开麦已达最大单次安全保护时长(60s)，自动收敛关麦防悬挂")
+            self.closeSession(sendStopTrigger: true)
+        }
+        safetyTimeoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.maxAutoSafetyTimeout, execute: work)
     }
 
     private func triggerSourceForCurrentOwner() -> SessionTriggerSource {

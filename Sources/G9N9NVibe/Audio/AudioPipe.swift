@@ -1,6 +1,6 @@
+import AudioToolbox
 import AVFoundation
 import CoreAudio
-import CoreMedia
 import Foundation
 
 /// 当前录音会话的物理触发来源（用于「智能随动」无冲突选通麦克风）
@@ -104,26 +104,28 @@ struct AudioRoutingDecision: Equatable {
 }
 
 /// 极低内存双麦克风路由与混音管线：
-/// - 免驱态：彻底休眠，不启动 AVCaptureSession 也不挂 CoreAudio IO（零音频内存占用）
+/// - 免驱态：彻底休眠，不启动 AudioQueue 也不挂 CoreAudio IO（零音频内存占用）
 /// - 驱动态：严格按会话按需启停 Mac 物理麦采集（防止常亮橙灯与 AirPods 蓝牙音质降级）
+/// - 采集层采用 AudioToolbox 原生 AudioQueue（11KB 极小双缓冲，零视频/媒体图依赖，关麦瞬间灭灯）
 /// - 实时 IO 回调全程使用预分配 FloatRingBuffer（Zero-Allocation），支持 0ms 透传与 120ms 双麦对齐
-final class AudioPipe: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
+final class AudioPipe: NSObject {
     static let shared = AudioPipe()
 
     private static let outputSampleRate: Double = 48_000
     private static let dualMixDelayFrames = Int(48_000 * 0.12) // 双麦合并时 120ms 对齐缓冲
+    private static let kBufferFrameCount: UInt32 = 960 // 20ms @ 48kHz (3840 字节极小缓冲)
 
     private let stateLock = NSLock()
     private let captureQueue = DispatchQueue(label: "io.github.g9n9n-vibe.capture", qos: .userInteractive)
 
-    // 预分配固定环形缓冲与单声道临时复用缓冲（全程零运行时堆分配）
+    // 预分配固定环形缓冲（全程零运行时堆分配）
     private let macRing = FloatRingBuffer(capacity: 32_768)
     private let remoteRing = FloatRingBuffer(capacity: 32_768)
-    private var monoScratch = [Float](repeating: 0, count: 4096)
     /// 遥控器蓝牙麦实时 DSP 增益（支持近场 +14dB / 标准 +20dB / 远场 +26dB 动态热切换）
     private var remoteGain: Float = AppStorage.remoteMicGainPreset.linearGain
 
-    private var captureSession: AVCaptureSession?
+    private var audioQueue: AudioQueueRef?
+    private var audioBuffers: [AudioQueueBufferRef?] = [nil, nil, nil]
     private var captureRunning = false
     private var idleStopWorkItem: DispatchWorkItem?
     private var outputIdleStopWorkItem: DispatchWorkItem?
@@ -387,21 +389,152 @@ final class AudioPipe: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         }
     }
 
+    private static let inputCallback: AudioQueueInputCallback = { userData, inAQ, inBuffer, inStartTime, inNumPackets, inPacketDesc in
+        guard let userData else { return }
+        let pipe = Unmanaged<AudioPipe>.fromOpaque(userData).takeUnretainedValue()
+        pipe.handleAudioQueueBuffer(inAQ: inAQ, inBuffer: inBuffer, numPackets: inNumPackets)
+    }
+
+    private func handleAudioQueueBuffer(inAQ: AudioQueueRef, inBuffer: AudioQueueBufferRef, numPackets: UInt32) {
+        let frameCount = Int(numPackets)
+        if frameCount > 0 {
+            let fPtr = inBuffer.pointee.mAudioData.assumingMemoryBound(to: Float.self)
+            var sumSq: Double = 0
+            for i in 0..<frameCount {
+                let v = fPtr[i]
+                sumSq += Double(v) * Double(v)
+            }
+
+            stateLock.lock()
+            let isActiveSession = sessionActive && !allMuted
+            let writeToRing = driverAvailable && policy.requiresDriver && isActiveSession
+            let mirrorOutput = (!driverAvailable || !policy.requiresDriver) && isActiveSession
+            if writeToRing {
+                for i in 0..<frameCount {
+                    macRing.push(fPtr[i])
+                }
+                let maxFrames = Int(Self.outputSampleRate * 0.35)
+                if macRing.count > maxFrames {
+                    macRing.dropOldest(macRing.count - maxFrames)
+                }
+            }
+            stateLock.unlock()
+
+            let now = Date()
+            if isActiveSession, onMacLevel != nil, now.timeIntervalSince(lastMacLevelAt) >= 0.04 {
+                lastMacLevelAt = now
+                let rms = sqrt(sumSq / Double(frameCount))
+                let rawDb = rms > 1e-5 ? max(-60.0, 20.0 * log10(rms)) : -120.0
+                let smoothed: Double
+                if rawDb > smoothedMacDb {
+                    smoothed = smoothedMacDb < -59 ? rawDb : (smoothedMacDb * 0.28 + rawDb * 0.72)
+                } else {
+                    smoothed = rawDb < -59 ? max(-120.0, smoothedMacDb - 6.0) : (smoothedMacDb * 0.65 + rawDb * 0.35)
+                }
+                smoothedMacDb = smoothed < -58.5 ? -120.0 : smoothed
+                let emitDb = smoothedMacDb
+                DispatchQueue.main.async { [weak self] in
+                    self?.onMacLevel?(emitDb)
+                    if mirrorOutput {
+                        self?.onOutputLevel?(emitDb)
+                    }
+                }
+            }
+        }
+
+        // 若仍处于采麦态，重新把 Buffer 压回队列继续采集
+        stateLock.lock()
+        let running = captureRunning
+        stateLock.unlock()
+        if running {
+            AudioQueueEnqueueBuffer(inAQ, inBuffer, 0, nil)
+        }
+    }
+
     private func startCaptureIfNeeded() {
         captureQueue.async { [weak self] in
-            guard let self, !self.captureRunning else { return }
+            guard let self else { return }
+            self.stateLock.lock()
+            let running = self.captureRunning
+            self.stateLock.unlock()
+            guard !running else { return }
+
             guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
                 AppLog.write("AUDIO-PIPE", "缺少麦克风权限，跳过 Mac 物理麦采集")
                 return
             }
 
-            if self.captureSession == nil {
-                guard let session = self.buildCaptureSession() else { return }
-                self.captureSession = session
+            var asbd = AudioStreamBasicDescription(
+                mSampleRate: Self.outputSampleRate,
+                mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+                mBytesPerPacket: 4,
+                mFramesPerPacket: 1,
+                mBytesPerFrame: 4,
+                mChannelsPerFrame: 1,
+                mBitsPerChannel: 32,
+                mReserved: 0
+            )
+
+            var newQueue: AudioQueueRef?
+            let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+            let status = AudioQueueNewInput(
+                &asbd,
+                Self.inputCallback,
+                selfPtr,
+                nil,
+                nil,
+                0,
+                &newQueue
+            )
+
+            guard status == noErr, let queue = newQueue else {
+                AppLog.write("AUDIO-PIPE", "创建 AudioQueue 原生物理采麦失败: \(status)")
+                return
             }
-            self.captureSession?.startRunning()
+
+            // 跟随当前系统物理麦，严格排除自身虚拟驱动
+            if let defaultID = MicRouteCoordinator.defaultInputDeviceID(),
+               let uid = MicRouteCoordinator.deviceUID(for: defaultID),
+               uid != AppStorage.virtualDriverDeviceUID {
+                var cfUID: CFString = uid as CFString
+                _ = withUnsafePointer(to: &cfUID) { ptr in
+                    AudioQueueSetProperty(queue, kAudioQueueProperty_CurrentDevice, ptr, UInt32(MemoryLayout<CFString>.size))
+                }
+            }
+
+            let bufferByteSize = Self.kBufferFrameCount * 4
+            var buffers: [AudioQueueBufferRef?] = [nil, nil, nil]
+            var allocateSuccess = true
+            for i in 0..<3 {
+                var buf: AudioQueueBufferRef?
+                let allocStatus = AudioQueueAllocateBuffer(queue, bufferByteSize, &buf)
+                if allocStatus == noErr, let b = buf {
+                    buffers[i] = b
+                    AudioQueueEnqueueBuffer(queue, b, 0, nil)
+                } else {
+                    allocateSuccess = false
+                    break
+                }
+            }
+
+            guard allocateSuccess else {
+                AudioQueueDispose(queue, true)
+                return
+            }
+
+            let startStatus = AudioQueueStart(queue, nil)
+            guard startStatus == noErr else {
+                AudioQueueDispose(queue, true)
+                return
+            }
+
+            self.stateLock.lock()
+            self.audioQueue = queue
+            self.audioBuffers = buffers
             self.captureRunning = true
-            AppLog.write("AUDIO-PIPE", "按需启动 Mac 物理麦采集")
+            self.stateLock.unlock()
+            AppLog.write("AUDIO-PIPE", "已启动 AudioQueue 原生轻量硬件采麦（11KB 极小缓冲，零视频媒体库依赖）")
         }
     }
 
@@ -411,7 +544,7 @@ final class AudioPipe: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
             self?.stopCaptureImmediately()
         }
         idleStopWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
     private func stopCaptureImmediately() {
@@ -419,217 +552,19 @@ final class AudioPipe: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         idleStopWorkItem = nil
         captureQueue.async { [weak self] in
             guard let self else { return }
-            if self.captureRunning {
-                self.captureSession?.stopRunning()
-                self.captureRunning = false
-                AppLog.write("AUDIO-PIPE", "空闲释放 Mac 物理麦采集（释放橙灯与蓝牙通话通道）")
-            }
-            // 彻底释放 AVCaptureSession 释放内存
-            self.captureSession = nil
             self.stateLock.lock()
+            let queue = self.audioQueue
+            self.audioQueue = nil
+            self.audioBuffers = [nil, nil, nil]
+            self.captureRunning = false
             self.macRing.reset()
+            self.smoothedMacDb = -120
             self.stateLock.unlock()
-        }
-    }
 
-    private func buildCaptureSession() -> AVCaptureSession? {
-        // 严格过滤排除自身虚拟驱动，杜绝自采啸叫死循环
-        let deviceTypes: [AVCaptureDevice.DeviceType]
-        if #available(macOS 14.0, *) {
-            deviceTypes = [.microphone, .external]
-        } else {
-            deviceTypes = [.builtInMicrophone, .externalUnknown]
-        }
-        let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: deviceTypes,
-            mediaType: .audio,
-            position: .unspecified
-        )
-        let physicalDevices = discovery.devices.filter {
-            $0.uniqueID != AppStorage.virtualDriverDeviceUID &&
-            $0.localizedName != AppStorage.virtualDriverDeviceName
-        }
-
-        // 优先匹配系统当前正在使用的物理默认麦（支持 AirPods / USB 麦 / 内置麦自动跟随）
-        var targetDevice: AVCaptureDevice?
-        if let defaultID = MicRouteCoordinator.defaultInputDeviceID(),
-           let defaultUID = MicRouteCoordinator.deviceUID(for: defaultID),
-           defaultUID != AppStorage.virtualDriverDeviceUID {
-            targetDevice = physicalDevices.first(where: { $0.uniqueID == defaultUID })
-        }
-        if targetDevice == nil {
-            if #available(macOS 14.0, *) {
-                targetDevice = physicalDevices.first(where: { $0.deviceType == .microphone }) ?? physicalDevices.first
-            } else {
-                targetDevice = physicalDevices.first(where: { $0.deviceType == .builtInMicrophone }) ?? physicalDevices.first
-            }
-        }
-
-        guard let device = targetDevice else {
-            AppLog.write("AUDIO-PIPE", "未找到可用的 Mac 物理麦克风")
-            return nil
-        }
-
-        let session = AVCaptureSession()
-        do {
-            let input = try AVCaptureDeviceInput(device: device)
-            guard session.canAddInput(input) else { return nil }
-            session.addInput(input)
-
-            let output = AVCaptureAudioDataOutput()
-            // 不强制覆写 audioSettings，直接接收设备原生 PCM 流并在回调里自适应解码，彻底避免 macOS 15 硬件麦格式不兼容导致静音
-            output.setSampleBufferDelegate(self, queue: captureQueue)
-            guard session.canAddOutput(output) else { return nil }
-            session.addOutput(output)
-            AppLog.write("AUDIO-PIPE", "已绑定物理麦克风采集源: \(device.localizedName)")
-            return session
-        } catch {
-            AppLog.write("AUDIO-PIPE", "创建 Mac 麦采集会话失败: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    func captureOutput(
-        _ output: AVCaptureOutput,
-        didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
-    ) {
-        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
-            return
-        }
-        let asbd = asbdPtr.pointee
-        let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
-        guard frameCount > 0 else { return }
-
-        // 使用标准 AudioBufferList 读取，兼容交错 / 非交错、Float32 / Int16 / Int32 任意硬件原生格式
-        var blockBuffer: CMBlockBuffer?
-        var listSizeNeeded = 0
-        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer,
-            bufferListSizeNeededOut: &listSizeNeeded,
-            bufferListOut: nil,
-            bufferListSize: 0,
-            blockBufferAllocator: nil,
-            blockBufferMemoryAllocator: nil,
-            flags: 0,
-            blockBufferOut: nil
-        )
-        guard listSizeNeeded > 0 else { return }
-        let rawList = UnsafeMutableRawPointer.allocate(
-            byteCount: listSizeNeeded,
-            alignment: MemoryLayout<AudioBufferList>.alignment
-        )
-        defer { rawList.deallocate() }
-        let ablPtr = rawList.assumingMemoryBound(to: AudioBufferList.self)
-        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer,
-            bufferListSizeNeededOut: nil,
-            bufferListOut: ablPtr,
-            bufferListSize: listSizeNeeded,
-            blockBufferAllocator: kCFAllocatorDefault,
-            blockBufferMemoryAllocator: kCFAllocatorDefault,
-            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
-            blockBufferOut: &blockBuffer
-        )
-        guard status == noErr else { return }
-
-        let buffers = UnsafeMutableAudioBufferListPointer(ablPtr)
-        guard let firstBuf = buffers.first, let mData = firstBuf.mData, firstBuf.mDataByteSize > 0 else { return }
-
-        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
-        let isNonInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) != 0
-        let channelsInFirstBuf = isNonInterleaved ? 1 : max(1, Int(asbd.mChannelsPerFrame))
-        let bits = Int(asbd.mBitsPerChannel)
-
-        // 复用预分配单声道缓冲，零实时堆分配
-        if monoScratch.count < frameCount {
-            monoScratch = [Float](repeating: 0, count: frameCount)
-        }
-        var sumSq: Double = 0
-        var validFrames = 0
-
-        if isFloat && bits == 32 {
-            let totalFloats = Int(firstBuf.mDataByteSize) / MemoryLayout<Float>.size
-            validFrames = min(frameCount, totalFloats / channelsInFirstBuf)
-            let fPtr = mData.assumingMemoryBound(to: Float.self)
-            for i in 0..<validFrames {
-                let v = fPtr[i * channelsInFirstBuf]
-                monoScratch[i] = v
-                sumSq += Double(v) * Double(v)
-            }
-        } else if !isFloat && bits == 16 {
-            let totalSamples = Int(firstBuf.mDataByteSize) / MemoryLayout<Int16>.size
-            validFrames = min(frameCount, totalSamples / channelsInFirstBuf)
-            let iPtr = mData.assumingMemoryBound(to: Int16.self)
-            for i in 0..<validFrames {
-                let v = Float(iPtr[i * channelsInFirstBuf]) / 32768.0
-                monoScratch[i] = v
-                sumSq += Double(v) * Double(v)
-            }
-        } else if !isFloat && bits == 32 {
-            let totalSamples = Int(firstBuf.mDataByteSize) / MemoryLayout<Int32>.size
-            validFrames = min(frameCount, totalSamples / channelsInFirstBuf)
-            let iPtr = mData.assumingMemoryBound(to: Int32.self)
-            for i in 0..<validFrames {
-                let v = Float(Double(iPtr[i * channelsInFirstBuf]) / 2_147_483_648.0)
-                monoScratch[i] = v
-                sumSq += Double(v) * Double(v)
-            }
-        } else {
-            return
-        }
-
-        stateLock.lock()
-        let isActiveSession = sessionActive && !allMuted
-        let writeToRing = driverAvailable && policy.requiresDriver && isActiveSession
-        let mirrorOutput = (!driverAvailable || !policy.requiresDriver) && isActiveSession
-        if writeToRing && validFrames > 0 {
-            let inRate = asbd.mSampleRate > 0 ? asbd.mSampleRate : Self.outputSampleRate
-            if abs(inRate - Self.outputSampleRate) < 1.0 {
-                for i in 0..<validFrames {
-                    macRing.push(monoScratch[i])
-                }
-            } else {
-                // 任意采样率硬件麦（如 16kHz AirPods / 44.1kHz 外置麦）自动线性重采样至 48kHz
-                let ratio = Self.outputSampleRate / inRate
-                let outCount = max(1, Int(Double(validFrames) * ratio))
-                let invRatio = 1.0 / ratio
-                for i in 0..<outCount {
-                    let pos = Double(i) * invRatio
-                    let idx = Int(pos)
-                    let frac = Float(pos - Double(idx))
-                    let s0 = monoScratch[min(idx, validFrames - 1)]
-                    let s1 = monoScratch[min(idx + 1, validFrames - 1)]
-                    macRing.push(s0 + (s1 - s0) * frac)
-                }
-            }
-            let maxFrames = Int(Self.outputSampleRate * 0.35)
-            if macRing.count > maxFrames {
-                macRing.dropOldest(macRing.count - maxFrames)
-            }
-        }
-        stateLock.unlock()
-
-        let now = Date()
-        if isActiveSession, onMacLevel != nil, now.timeIntervalSince(lastMacLevelAt) >= 0.04 {
-            lastMacLevelAt = now
-            let rms = sqrt(sumSq / Double(max(1, frameCount)))
-            let rawDb = rms > 1e-5 ? max(-60.0, 20.0 * log10(rms)) : -120.0
-            // 快起慢落平滑（Attack 0.72 / Release 0.35），让 40 根声学微光柱跳动灵动跟手
-            let smoothed: Double
-            if rawDb > smoothedMacDb {
-                smoothed = smoothedMacDb < -59 ? rawDb : (smoothedMacDb * 0.28 + rawDb * 0.72)
-            } else {
-                smoothed = rawDb < -59 ? max(-120.0, smoothedMacDb - 6.0) : (smoothedMacDb * 0.65 + rawDb * 0.35)
-            }
-            smoothedMacDb = smoothed < -58.5 ? -120.0 : smoothed
-            let emitDb = smoothedMacDb
-            DispatchQueue.main.async { [weak self] in
-                self?.onMacLevel?(emitDb)
-                if mirrorOutput {
-                    self?.onOutputLevel?(emitDb)
-                }
+            if let queue {
+                AudioQueueStop(queue, true)
+                AudioQueueDispose(queue, true)
+                AppLog.write("AUDIO-PIPE", "物理麦硬件采麦已释放（系统麦克风橙灯瞬灭）")
             }
         }
     }

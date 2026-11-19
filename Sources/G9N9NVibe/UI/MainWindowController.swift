@@ -421,6 +421,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         win.titleVisibility = .hidden
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false
+        win.collectionBehavior = [.fullScreenNone]
         win.contentViewController = hosting
         win.setContentSize(NSSize(width: 960, height: 660))
         win.minSize = NSSize(width: 840, height: 600)
@@ -436,16 +437,15 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // 关键低内存优化：彻底释放 NSWindow 和 SwiftUI NSHostingController 视图树
+        // 关键低内存优化：彻底解绑释放 NSWindow 和 SwiftUI NSHostingController 视图树
+        window?.orderOut(nil)
         window?.contentViewController = nil
         window?.delegate = nil
         window = nil
         onVisibilityChanged?(false)
-        AppLog.write("UI", "主窗口已关闭并彻底释放 SwiftUI 视图树内存")
+        AppLog.write("UI", "主窗口已关闭，执行全套内核级脏页净化与深度压降")
 
-        // 极致内存调优：延时 0.15 秒主动通知底层分配器将已释放的内存脏页归还系统内核
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            malloc_zone_pressure_relief(nil, 0)
-        }
+        // 调用 Darwin XNU 内核专用深度内存压降
+        MemoryReclaim.performDeepPurge()
     }
 }

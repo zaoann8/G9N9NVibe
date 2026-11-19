@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// 纯 AppKit 极简常驻菜单栏控制器（平时不加载主窗口，常驻极低内存）
-final class StatusBarController: NSObject, NSPopoverDelegate {
+/// 纯 AppKit 极简常驻菜单栏控制器：
+/// - 使用轻量原生 NSPanel 悬浮面板替代 NSPopover，彻底消除系统 ThemeWidgetControlViewService 辅助进程！
+/// - 关面板即时彻底释放所有 SwiftUI 视图树与脏页，常驻极低内存
+final class StatusBarController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let viewModel: AppViewModel
-    private var popover: NSPopover?
+    private var panel: NSPanel?
     private var eventMonitor: Any?
 
     var onOpenMainWindow: (() -> Void)?
@@ -26,7 +28,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         button.image = Self.makeMenuBarIcon(accentColor: nil)
         button.toolTip = "G9NVibe · 点击切换麦克风或打开控制台"
         button.target = self
-        button.action = #selector(togglePopover(_:))
+        button.action = #selector(togglePanel(_:))
     }
 
     func updateIconState(isRecording: Bool, isRemoteSource: Bool) {
@@ -78,63 +80,91 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         return image
     }
 
-    @objc private func togglePopover(_ sender: AnyObject?) {
-        if let pop = popover, pop.isShown {
-            closePopover()
+    @objc private func togglePanel(_ sender: AnyObject?) {
+        if let p = panel, p.isVisible {
+            closePanel()
             return
         }
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button, let win = button.window else { return }
         viewModel.refreshPermissions()
 
-        let pop = NSPopover()
-        pop.behavior = .transient
-        pop.delegate = self
-        pop.contentSize = NSSize(width: 256, height: 324)
-        pop.contentViewController = NSHostingController(
+        let cardWidth: CGFloat = 264
+        let cardHeight: CGFloat = 338
+
+        let buttonScreenRect = win.convertToScreen(button.bounds)
+        var originX = buttonScreenRect.midX - cardWidth / 2
+        let originY = buttonScreenRect.minY - cardHeight - 6
+
+        if let screen = win.screen ?? NSScreen.main {
+            let visible = screen.visibleFrame
+            if originX + cardWidth > visible.maxX {
+                originX = visible.maxX - cardWidth - 8
+            }
+            if originX < visible.minX {
+                originX = visible.minX + 8
+            }
+        }
+
+        let p = NSPanel(
+            contentRect: NSRect(x: originX, y: originY, width: cardWidth, height: cardHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        p.isFloatingPanel = true
+        p.level = .popUpMenu
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = true
+        p.delegate = self
+        p.isMovableByWindowBackground = false
+
+        let hosting = NSHostingController(
             rootView: MenuBarQuickCardView(
                 vm: viewModel,
                 onOpenMain: { [weak self] in
-                    self?.closePopover()
+                    self?.closePanel()
                     self?.onOpenMainWindow?()
                 },
                 onCheckUpdates: { [weak self] in
-                    self?.closePopover()
+                    self?.closePanel()
                     self?.onCheckUpdatesRequested?()
                 },
                 onClose: { [weak self] in
-                    self?.closePopover()
+                    self?.closePanel()
                 },
                 onQuit: { [weak self] in
-                    self?.closePopover()
+                    self?.closePanel()
                     self?.onQuitRequested?()
                 }
             )
         )
-        self.popover = pop
-        pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        p.contentViewController = hosting
+        self.panel = p
+        p.setFrame(NSRect(x: originX, y: originY, width: cardWidth, height: cardHeight), display: true)
+        p.makeKeyAndOrderFront(nil)
         startEventMonitor()
     }
 
-    func closePopover() {
+    func closePanel() {
         stopEventMonitor()
-        popover?.performClose(nil)
-        // 关闭即释放菜单栏 Popover 视图树
-        popover?.contentViewController = nil
-        popover = nil
+        panel?.orderOut(nil)
+        panel?.contentViewController = nil
+        panel?.delegate = nil
+        panel = nil
+        MemoryReclaim.performDeepPurge()
     }
 
-    func popoverDidClose(_ notification: Notification) {
-        stopEventMonitor()
-        popover?.contentViewController = nil
-        popover = nil
+    func windowDidResignKey(_ notification: Notification) {
+        closePanel()
     }
 
     private func startEventMonitor() {
         stopEventMonitor()
-        // 全局监听：当用户在屏幕任何地方（桌面、其他App窗口）点击时，自动关闭 Popover
+        // 全局监听：当用户在屏幕任何地方（桌面、其他App窗口）点击时，自动关闭面板
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             DispatchQueue.main.async {
-                self?.closePopover()
+                self?.closePanel()
             }
         }
     }
@@ -294,8 +324,17 @@ private struct MenuBarQuickCardView: View {
             }
             .padding(.horizontal, 4)
         }
-        .padding(12)
-        .frame(width: 256)
-        .background(palette.cardBg)
+        .padding(14)
+        .frame(width: 264)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(palette.cardBg)
+                .shadow(color: Color.black.opacity(0.18), radius: 14, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(palette.borderMed, lineWidth: 1)
+        )
+        .padding(4)
     }
 }

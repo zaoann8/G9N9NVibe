@@ -544,10 +544,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             viewModel.outputLevelDb = -120
             viewModel.remoteLevelDb = -120
 
-            // 深度内存清理：强制内核分配器归还所有脏页
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                malloc_zone_pressure_relief(nil, 0)
-            }
+            // 深度内存清理：强制内核分配器与 XNU 内核归还所有脏页
+            MemoryReclaim.performDeepPurge()
         }
     }
 

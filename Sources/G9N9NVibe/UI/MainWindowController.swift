@@ -598,20 +598,26 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         } else {
             // 保存当前位置以便下一次精准还原
             normalFrame = win.frame
-            // 放大至屏幕舒适最大化（四周留出 20pt 呼吸边距）
-            let target = NSRect(
-                x: visible.origin.x + 20,
-                y: visible.origin.y + 20,
-                width: max(840, visible.width - 40),
-                height: max(600, visible.height - 40)
-            )
+            // 100% 满屏无缝铺满整个可用屏幕（顶部紧贴菜单栏，底部紧贴 Dock 栏，两侧完全占满）
             isZoomed = true
-            win.setFrame(target, display: true, animate: true)
+            win.setFrame(visible, display: true, animate: true)
         }
     }
 
     func windowWillClose(_ notification: Notification) {
         closeWindow()
+    }
+}
+
+/// 苹果原厂关闭叉号矢量形状（线宽 1.15pt，端点纯圆）
+struct AppleCloseCrossShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        return path
     }
 }
 
@@ -621,16 +627,16 @@ struct AppleFullScreenIconShape: Shape {
         var path = Path()
         let w = rect.width
         let h = rect.height
-        let gap: CGFloat = 1.15
+        let gap: CGFloat = 0.85
 
-        // 左上直角三角形（直角在左上）
+        // 左上直角三角形
         var top = Path()
         top.move(to: CGPoint(x: 0, y: 0))
         top.addLine(to: CGPoint(x: w - gap, y: 0))
         top.addLine(to: CGPoint(x: 0, y: h - gap))
         top.closeSubpath()
 
-        // 右下直角三角形（直角在右下）
+        // 右下直角三角形
         var bot = Path()
         bot.move(to: CGPoint(x: gap, y: h))
         bot.addLine(to: CGPoint(x: w, y: gap))
@@ -645,7 +651,7 @@ struct AppleFullScreenIconShape: Shape {
 
 /// 纯手绘苹果原厂标准红黄绿三色交通灯按钮：
 /// - 彻底摆脱 AppKit 标题栏托管机制，从源头上 100% 杜绝 ThemeWidgetControlViewService！
-/// - 悬停时浮现苹果官方质感微图标（酒红 ×、暗黄 −、墨绿全屏双三角），触感手感与 macOS 官方一模一样。
+/// - 悬停时浮现苹果官方质感微图标（酒红圆角 ×、暗黄胶囊 −、墨绿对角双三角），触感手感与 macOS 官方一模一样。
 struct AppleTrafficLightsView: View {
     @State private var isHovered = false
     let onClose: () -> Void
@@ -653,18 +659,21 @@ struct AppleTrafficLightsView: View {
     let onZoom: () -> Void
 
     var body: some View {
-        HStack(spacing: 7.5) {
+        HStack(spacing: 8) {
             // 红色关闭按钮
             Button(action: onClose) {
                 ZStack {
                     Circle()
-                        .fill(Color(red: 1.0, green: 0.36, blue: 0.33))
+                        .fill(Color(red: 1.0, green: 0.376, blue: 0.341))
                     Circle()
                         .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
                     if isHovered {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 6.5, weight: .bold))
-                            .foregroundColor(Color(red: 0.46, green: 0.05, blue: 0.05))
+                        AppleCloseCrossShape()
+                            .stroke(
+                                Color(red: 0.46, green: 0.05, blue: 0.05),
+                                style: StrokeStyle(lineWidth: 1.15, lineCap: .round)
+                            )
+                            .frame(width: 5.5, height: 5.5)
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -678,13 +687,13 @@ struct AppleTrafficLightsView: View {
             Button(action: onMinimize) {
                 ZStack {
                     Circle()
-                        .fill(Color(red: 1.0, green: 0.74, blue: 0.18))
+                        .fill(Color(red: 1.0, green: 0.741, blue: 0.180))
                     Circle()
                         .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
                     if isHovered {
-                        Image(systemName: "minus")
-                            .font(.system(size: 6.5, weight: .bold))
-                            .foregroundColor(Color(red: 0.52, green: 0.30, blue: 0.04))
+                        Capsule()
+                            .fill(Color(red: 0.52, green: 0.30, blue: 0.04))
+                            .frame(width: 6, height: 1.15)
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -698,13 +707,13 @@ struct AppleTrafficLightsView: View {
             Button(action: onZoom) {
                 ZStack {
                     Circle()
-                        .fill(Color(red: 0.16, green: 0.80, blue: 0.25))
+                        .fill(Color(red: 0.157, green: 0.784, blue: 0.251))
                     Circle()
                         .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5)
                     if isHovered {
                         AppleFullScreenIconShape()
                             .fill(Color(red: 0.04, green: 0.35, blue: 0.08))
-                            .frame(width: 6, height: 6)
+                            .frame(width: 5.5, height: 5.5)
                     }
                 }
                 .frame(width: 12, height: 12)
@@ -712,11 +721,15 @@ struct AppleTrafficLightsView: View {
             }
             .buttonStyle(.plain)
             .simultaneousGesture(TapGesture().onEnded { onZoom() })
-            .help("缩放窗口 / 舒适最大化")
+            .help("全屏 / 满屏铺满")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 2)
-        .onHover { isHovered = $0 }
+        .onHover { hovered in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovered
+            }
+        }
         .allowsHitTesting(true)
     }
 }

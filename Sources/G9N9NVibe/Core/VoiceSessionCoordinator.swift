@@ -57,7 +57,7 @@ final class VoiceSessionCoordinator {
     private var closeTimeoutWork: DispatchWorkItem?
     private var safetyTimeoutWork: DispatchWorkItem?
 
-    var onRequestOpenRemoteMic: (() -> RemoteMicrophoneOpenResult)?
+    var onRequestOpenRemoteMic: ((_ bypassDebounce: Bool) -> RemoteMicrophoneOpenResult)?
     var onRequestCloseRemoteMic: (() -> Void)?
     var onStatusChanged: ((String, SessionTriggerSource, Bool) -> Void)?
 
@@ -161,9 +161,9 @@ final class VoiceSessionCoordinator {
         }
 
         guard reason == 0x02, let began = gestureBeganAt else {
-            // 非物理松开（如遥控器硬件 15~30 秒单流超时），若仍在录音且由遥控器持有且需要遥控器音频，尝试静默续麦
+            // 非物理松开（如遥控器硬件 15~30 秒单流超时），若仍在录音且由遥控器持有且需要遥控器音频，尝试静默续麦（直通防抖）
             if phase == .open, owner == .remote, shouldConsumeRemoteAudio() {
-                _ = onRequestOpenRemoteMic?()
+                _ = onRequestOpenRemoteMic?(true)
             }
             return
         }
@@ -181,10 +181,10 @@ final class VoiceSessionCoordinator {
             // 长按对讲：松手立即停止识别
             closeSession(sendStopTrigger: true)
         } else {
-            // 短按切换：保持录音开启；若当前需要遥控器麦则重新打开遥控器持续收音
+            // 短按切换：保持录音开启；若当前需要遥控器麦则重新打开遥控器持续收音（强制直通防抖，杜绝短按丢麦）
             if phase == .open || phase == .opening {
                 if shouldConsumeRemoteAudio() {
-                    _ = onRequestOpenRemoteMic?()
+                    _ = onRequestOpenRemoteMic?(true)
                 }
                 publishCurrentStatus()
             }

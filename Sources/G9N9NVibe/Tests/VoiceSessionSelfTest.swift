@@ -247,6 +247,7 @@ enum VoiceSessionSelfTest {
         var clock = Date(timeIntervalSince1970: 2000)
         var triggers: [Bool] = []
         var renewCount = 0
+        var lastBypass = false
 
         let coord = VoiceSessionCoordinator(
             audioState: mock,
@@ -257,8 +258,9 @@ enum VoiceSessionSelfTest {
             triggerMode: { .toggle },
             now: { clock }
         )
-        coord.onRequestOpenRemoteMic = {
+        coord.onRequestOpenRemoteMic = { bypass in
             renewCount += 1
+            lastBypass = bypass
             return .sent
         }
         coord.start()
@@ -271,6 +273,7 @@ enum VoiceSessionSelfTest {
         expect(coord.debugSnapshot.phase == .open, "短按松手后应保持录音开启")
         expect(triggers == [true], "第一次短按不应提前发关闭触发")
         expect(renewCount == 1, "智能随动需要遥控器音频时，短按松手后应请求续麦保持收音")
+        expect(lastBypass, "短按续麦必须强制开启直通防抖(bypassDebounce)，彻底杜绝短按丢失录音")
 
         // 第二次短按：关闭录音
         clock = clock.addingTimeInterval(1.0)
@@ -294,7 +297,7 @@ enum VoiceSessionSelfTest {
             triggerMode: { .toggle },
             now: Date.init
         )
-        coord.onRequestOpenRemoteMic = {
+        coord.onRequestOpenRemoteMic = { _ in
             renewCount += 1
             return .sent
         }
@@ -326,7 +329,7 @@ enum VoiceSessionSelfTest {
             triggerMode: { .hold },
             now: Date.init
         )
-        coord.onRequestOpenRemoteMic = {
+        coord.onRequestOpenRemoteMic = { _ in
             renewCount += 1
             return .unavailable
         }

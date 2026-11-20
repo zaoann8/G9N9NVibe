@@ -370,8 +370,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
 
         // 会话状态机联动
-        sessionCoordinator.onRequestOpenRemoteMic = { [weak self] in
-            self?.bleBridge.openMicrophone() ?? .unavailable
+        sessionCoordinator.onRequestOpenRemoteMic = { [weak self] bypassDebounce in
+            self?.bleBridge.openMicrophone(bypassDebounce: bypassDebounce) ?? .unavailable
         }
         sessionCoordinator.onRequestCloseRemoteMic = { [weak self] in
             self?.bleBridge.closeMicrophone()

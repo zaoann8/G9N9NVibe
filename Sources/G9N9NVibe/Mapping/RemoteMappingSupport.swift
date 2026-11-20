@@ -292,7 +292,7 @@ enum RemoteMappingTarget: String, CaseIterable, Identifiable, Codable, Hashable 
         case .areaScreenshot: return (0x15, [.maskControl, .maskCommand, .maskShift]) // ⌃⌘⇧4 截图至剪贴板
         case .newTab: return (0x11, [.maskCommand])                 // ⌘T
         case .lockScreen:
-            return (0x0C, CGEventFlags(rawValue: CGEventFlags.maskControl.rawValue | CGEventFlags.maskCommand.rawValue | 0x12))
+            return (0x0C, [.maskControl, .maskCommand])             // ⌃⌘Q 锁屏
         default:
             return nil
         }

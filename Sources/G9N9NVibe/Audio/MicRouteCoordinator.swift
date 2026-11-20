@@ -43,16 +43,17 @@ enum MicRouteCoordinator {
         }
 
         if let savedUID = AppStorage.savedOriginalInputDeviceUID,
-           let targetID = deviceID(withUID: savedUID),
-           targetID != currentID {
-            let status = setDefaultInputDevice(targetID)
-            AppLog.write("MIC-ROUTE", "已还原系统默认麦 -> \(deviceName(for: targetID) ?? savedUID) status=\(status)")
+           let targetID = deviceID(withUID: savedUID) {
+            if targetID != currentID {
+                let status = setDefaultInputDevice(targetID)
+                AppLog.write("MIC-ROUTE", "已还原系统默认麦 -> \(deviceName(for: targetID) ?? savedUID) status=\(status)")
+            }
             AppStorage.savedOriginalInputDeviceUID = nil
             return
         }
 
-        // 若原保存设备已拔出，自动回落至内建物理麦克风
-        if let fallbackID = firstPhysicalInputDeviceID() {
+        // 仅当原保存设备已拔出且当前默认麦仍为虚拟驱动时，才回落至内建物理麦克风
+        if currentIsVirtual, let fallbackID = firstPhysicalInputDeviceID() {
             let status = setDefaultInputDevice(fallbackID)
             AppLog.write("MIC-ROUTE", "原设备不可用，回落至物理麦 -> \(deviceName(for: fallbackID) ?? "Built-in") status=\(status)")
             AppStorage.savedOriginalInputDeviceUID = nil

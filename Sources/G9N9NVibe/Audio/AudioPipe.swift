@@ -121,6 +121,8 @@ final class AudioPipe: NSObject {
     // 预分配固定环形缓冲（全程零运行时堆分配）
     private let macRing = FloatRingBuffer(capacity: 32_768)
     private let remoteRing = FloatRingBuffer(capacity: 32_768)
+    /// 双麦合并时 120ms 初始相位对齐延迟建立标志（防止每个 IOProc 周期因水位波动交替产生 512 帧音频与静音）
+    private var macDelayPrimed = false
     /// 遥控器蓝牙麦实时 DSP 增益（支持近场 +14dB / 标准 +20dB / 远场 +26dB 动态热切换）
     private var remoteGain: Float = AppStorage.remoteMicGainPreset.linearGain
 
@@ -171,6 +173,7 @@ final class AudioPipe: NSObject {
         let preview = uiPreviewEnabled
         macRing.reset()
         remoteRing.reset()
+        macDelayPrimed = false
         stateLock.unlock()
 
         if driverAvailable, let deviceID = MicRouteCoordinator.virtualMicDeviceID() {
@@ -210,6 +213,7 @@ final class AudioPipe: NSObject {
             smoothedMacDb = -120
             macRing.reset()
             remoteRing.reset()
+            macDelayPrimed = false
         }
         stateLock.unlock()
 
@@ -262,6 +266,7 @@ final class AudioPipe: NSObject {
             // 结束会话或切换触发源时同时清空两路环形缓冲，彻底杜绝旧尾音串入下一次说话
             macRing.reset()
             remoteRing.reset()
+            macDelayPrimed = false
             if !active {
                 smoothedMacDb = -120
             }
@@ -558,6 +563,7 @@ final class AudioPipe: NSObject {
             self.audioBuffers = [nil, nil, nil]
             self.captureRunning = false
             self.macRing.reset()
+            self.macDelayPrimed = false
             self.smoothedMacDb = -120
             self.stateLock.unlock()
 
@@ -688,8 +694,18 @@ final class AudioPipe: NSObject {
         let useMac = decision.useMacInVirtualOutput
         let useRemote = decision.useRemoteInVirtualOutput
 
-        // 双麦合并时保持 Mac 路 120ms 缓冲水位与 BLE 对齐；单独使用 Mac 路则 0ms 零延迟输出
-        let allowMacPop = !decision.applyDualMixDelay || (macRing.count >= Self.dualMixDelayFrames)
+        // 双麦合并时维持 120ms 初始相位对齐延迟线：
+        // 初始积攒满 120ms 后标记为 primed，此后只要缓冲未彻底掏空即可平滑连续出队，杜绝周期性断音
+        if decision.applyDualMixDelay {
+            if !macDelayPrimed && macRing.count >= Self.dualMixDelayFrames {
+                macDelayPrimed = true
+            } else if macDelayPrimed && macRing.count == 0 {
+                macDelayPrimed = false
+            }
+        } else {
+            macDelayPrimed = true
+        }
+        let allowMacPop = macDelayPrimed
 
         var sumSq: Float = 0
         for f in 0..<frameCount {

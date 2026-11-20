@@ -390,14 +390,30 @@
       filter: drop-shadow(0 14px 22px rgba(22, 22, 21, 0.16));
       user-select: none;
     }
-    .r-key { cursor: pointer; transition: opacity 0.14s ease; }
+    .r-key {
+      cursor: pointer;
+      transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.14s ease;
+      transform-box: fill-box;
+      transform-origin: center center;
+    }
     .r-key:hover { opacity: 0.88; }
-    .r-key.active .r-fill { fill: var(--brand) !important; stroke: var(--brand) !important; }
+    .r-key.active { transform: scale(0.92); }
+    .r-key.active .r-fill {
+      fill: var(--brand) !important;
+      stroke: var(--brand) !important;
+      filter: drop-shadow(0 2px 7px rgba(228, 70, 29, 0.42));
+    }
     .r-key.active .r-fg { fill: #ffffff !important; stroke: #ffffff !important; }
     .r-key.active .r-text { fill: #ffffff !important; }
-    .r-sector { cursor: pointer; transition: fill 0.14s ease; }
-    .r-sector:hover { fill: rgba(228, 70, 29, 0.16); }
-    .r-sector.active { fill: rgba(228, 70, 29, 0.34); }
+    .r-sector {
+      cursor: pointer;
+      transition: fill 0.14s ease, filter 0.14s ease;
+    }
+    .r-sector:hover { fill: rgba(228, 70, 29, 0.18); }
+    .r-sector.active {
+      fill: rgba(228, 70, 29, 0.36);
+      filter: drop-shadow(0 0 6px rgba(228, 70, 29, 0.45));
+    }
     .led-glow {
       animation: breathe 2.4s ease-in-out infinite;
       transform-origin: 90px 406px;
@@ -422,6 +438,14 @@
       border: 1px solid var(--border);
       border-radius: 11px;
       padding: 12px;
+    }
+    .key-head, .action-row {
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+    .inspector-box.switching .key-head,
+    .inspector-box.switching .action-row {
+      opacity: 0.45;
+      transform: translateY(2px);
     }
     .key-head {
       display: flex;
@@ -1304,8 +1328,34 @@
   </footer>
 
   <script>
-    // 正式仓库地址：首屏已内置最新稳定版直链（零等待延迟），异步检查若有更新版本则无缝升级
+    // 正式仓库地址：首屏内置静态最新版（零延迟），配合本地缓存与异步检查实现无缝自动更新
     const MANUAL_GITHUB_REPO = "zaoann8/G9N9NVibe";
+    const CACHE_RELEASE_KEY = "g9nvibe_release_info_v1";
+
+    // 1. 优先读取客户端本地缓存，实现二次打开与刷新绝对 0 延迟秒开
+    try {
+      const cached = localStorage.getItem(CACHE_RELEASE_KEY);
+      if (cached) {
+        const d = JSON.parse(cached);
+        if (d.tag) {
+          document.querySelectorAll(".brand-ver").forEach(el => { el.textContent = d.tag; });
+        }
+        if (d.dmgUrl) {
+          document.querySelectorAll(".js-dl-link").forEach(a => {
+            a.href = d.dmgUrl;
+            a.removeAttribute("target");
+            if (d.dmgName) a.setAttribute("download", d.dmgName);
+            if (a.classList.contains("btn-primary") && d.tag) {
+              const zhSpan = a.querySelector(".zh");
+              const enSpan = a.querySelector(".en");
+              const mbStr = d.mb ? " (" + d.mb + ")" : "";
+              if (zhSpan) zhSpan.textContent = "免费下载 " + d.tag + " macOS DMG" + mbStr;
+              if (enSpan) enSpan.textContent = "Download " + d.tag + " macOS DMG" + mbStr;
+            }
+          });
+        }
+      }
+    } catch {}
 
     (async function resolveRepoLinks() {
       let repo = MANUAL_GITHUB_REPO.trim();
@@ -1321,7 +1371,6 @@
 
       document.querySelectorAll(".js-repo-link").forEach(a => { a.href = repoUrl; });
       document.querySelectorAll(".js-releases-link").forEach(a => { a.href = releasesUrl; });
-      // 保持页面默认的 DMG 直链预设，绝不预先篡改为跳转 Releases 网页
 
       try {
         const resp = await fetch("https://api.github.com/repos/" + repo + "/releases/latest", {
@@ -1330,7 +1379,6 @@
         if (!resp.ok) return;
         const rel = await resp.json();
         const tag = rel.tag_name || "";
-        // 自动匹配最新 Release 里的 DMG 安装包资产
         const dmgAsset = (rel.assets || []).find(item => item.name && item.name.toLowerCase().endsWith(".dmg"));
         if (tag) {
           document.querySelectorAll(".brand-ver").forEach(el => { el.textContent = tag; });
@@ -1348,9 +1396,19 @@
               if (enSpan) enSpan.textContent = "Download " + tag + " macOS DMG" + (mb ? " (" + mb + ")" : "");
             }
           });
+
+          // 成功获取最新版本后写入本地持久化，供下次打开秒速渲染
+          try {
+            localStorage.setItem(CACHE_RELEASE_KEY, JSON.stringify({
+              tag: tag,
+              dmgUrl: dmgAsset.browser_download_url,
+              dmgName: dmgAsset.name,
+              mb: mb
+            }));
+          } catch {}
         }
       } catch {
-        // 离线或 API 限流时，静默保持默认的最新 DMG 直链，绝不跳网页
+        // 离线或受限时静默保持默认的最新 DMG 直链，绝不跳网页
       }
     })();
 
@@ -1510,15 +1568,22 @@
       }, 95);
     }
 
+    const inspectorBox = document.querySelector(".inspector-box");
+
     function renderPreview(id) {
       activeKey = id;
       const info = keyMap[id] || keyMap["07"];
       const isEn = html.getAttribute("data-lang") === "en";
-      document.getElementById("pvBadge").textContent = info.badge;
-      document.getElementById("pvProto").textContent = info.proto;
-      document.getElementById("pvName").textContent = isEn ? info.en : info.zh;
-      document.getElementById("pvShort").textContent = isEn ? info.sEn : info.sZh;
-      document.getElementById("pvHold").textContent = isEn ? info.hEn : info.hZh;
+
+      if (inspectorBox) inspectorBox.classList.add("switching");
+      setTimeout(() => {
+        document.getElementById("pvBadge").textContent = info.badge;
+        document.getElementById("pvProto").textContent = info.proto;
+        document.getElementById("pvName").textContent = isEn ? info.en : info.zh;
+        document.getElementById("pvShort").textContent = isEn ? info.sEn : info.sZh;
+        document.getElementById("pvHold").textContent = isEn ? info.hEn : info.hZh;
+        if (inspectorBox) inspectorBox.classList.remove("switching");
+      }, 50);
 
       document.querySelectorAll(".r-key, .r-sector").forEach(el => {
         el.classList.toggle("active", el.getAttribute("data-key") === id);

@@ -2,7 +2,7 @@
 
 macOS 原生硬件桥接系统，将 Google Chromecast (G9N9N) 语音遥控器转化为专用实体声控与 Vibe Coding 效率控制器。
 
-[产品官网](https://zaoann8.github.io/G9N9NVibe/) | [最新版本下载](https://github.com/zaoann8/G9N9NVibe/releases/latest)
+[产品官网](https://zaoann8.github.io/G9N9NVibe/) | [最新版本下载](https://github.com/zaoann8/G9N9NVibe/releases/download/v1.0.3/G9NVibe-1.0.3.dmg) | [全部版本发布 (Releases)](https://github.com/zaoann8/G9N9NVibe/releases)
 
 ---
 

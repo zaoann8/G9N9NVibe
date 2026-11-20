@@ -2,41 +2,41 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>zh_CN</string>
-    <key>CFBundleDisplayName</key>
-    <string>G9NVibe</string>
-    <key>CFBundleExecutable</key>
-    <string>G9NVibe</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIdentifier</key>
-    <string>io.github.g9n9n-vibe</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>G9NVibe</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>G9NVibeGitHubRepo</key>
-    <string>zaoann8/G9N9NVibe</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
-    <key>LSUIElement</key>
-    <false/>
-    <key>MallocNanoZone</key>
-    <false/>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>G9NVibe 需要蓝牙权限连接 Google Chromecast (G9N9N) 遥控器并接收语音按键与电量信号。</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>G9NVibe 在启用双麦路由或智能随动模式时，需要读取 Mac 麦克风并与遥控器语音协同工作。</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>G9NVibe 在执行系统睡眠映射或一键启用内置音频驱动时需要系统事件授权。</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleDisplayName</key>
+	<string>G9NVibe</string>
+	<key>CFBundleExecutable</key>
+	<string>G9NVibe</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.g9n9n-vibe</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>G9NVibe</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.3</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>G9NVibeGitHubRepo</key>
+	<string>zaoann8/G9N9NVibe</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>LSUIElement</key>
+	<false/>
+	<key>MallocNanoZone</key>
+	<false/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>G9NVibe 在执行系统睡眠映射或一键启用内置音频驱动时需要系统事件授权。</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>G9NVibe 需要蓝牙权限连接 Google Chromecast (G9N9N) 遥控器并接收语音按键与电量信号。</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>G9NVibe 在启用双麦路由或智能随动模式时，需要读取 Mac 麦克风并与遥控器语音协同工作。</string>
 </dict>
 </plist>

@@ -142,12 +142,19 @@ jobs:
 
           with open(path, 'w', encoding='utf-8') as f:
               f.write(content)
-          print('Successfully updated docs/index.html for ' + TAG)
+
+          readme_path = 'README.md'
+          with open(readme_path, 'r', encoding='utf-8') as f:
+              readme = f.read()
+          readme = re.sub(r'releases/download/v[0-9.]+/G9NVibe-[0-9.]+\.dmg', f'releases/download/{TAG}/G9NVibe-{VER}.dmg', readme)
+          with open(readme_path, 'w', encoding='utf-8') as f:
+              f.write(readme)
+          print('Successfully updated docs/index.html & README.md for ' + TAG)
           "
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html VERSION Packaging/Info.plist || true
+          git add docs/index.html README.md VERSION Packaging/Info.plist || true
           if ! git diff-index --quiet HEAD --; then
             git commit -m "chore(release): 自动同步发布版本 $TAG 至官网与配置文件 [skip ci]"
             git push origin HEAD:${GITHUB_REF_NAME:-main} || true

@@ -109,6 +109,15 @@ final class G9N9NHIDBridge {
         start()
     }
 
+    /// 系统休眠唤醒（Wake）自愈：若当前无活动设备，重新拉起 HID Manager 扫描重连
+    func wakeRecover() {
+        guard remappingEnabled else { return }
+        if activeDevice == nil {
+            AppLog.write("G9N9N-HID", "系统唤醒且无活跃设备，重新初始化 HID 设备监听")
+            start()
+        }
+    }
+
     fileprivate func deviceDidMatch(result: IOReturn, device: IOHIDDevice) {
         guard result == kIOReturnSuccess, activeDevice == nil else { return }
         activeDevice = device

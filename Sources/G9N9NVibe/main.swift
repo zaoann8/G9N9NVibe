@@ -26,7 +26,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var sigtermSource: DispatchSourceSignal?
     private var sigintSource: DispatchSourceSignal?
     private var powerOffObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
     private var activeAppObserver: NSObjectProtocol?
+    private var autoSwitchDebounceWork: DispatchWorkItem?
     private var testSpeakTimeoutWork: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -240,6 +242,16 @@ final class AppController: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.notificationCenter.removeObserver(activeAppObserver)
             self.activeAppObserver = nil
         }
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
+        if let powerOffObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(powerOffObserver)
+            self.powerOffObserver = nil
+        }
+        autoSwitchDebounceWork?.cancel()
+        autoSwitchDebounceWork = nil
         sessionCoordinator.stopAndReleaseAll()
         InputTrigger.releaseHeldTrigger()
         AppSwitcherSession.shared.commit()
@@ -277,6 +289,25 @@ final class AppController: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             self?.performSafeShutdown()
         }
+
+        // 注册系统唤醒（Sleep / Wake）自愈恢复：Mac 盒盖休眠再唤醒后，自动恢复蓝牙与 HID 硬件连接
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            AppLog.write("APP", "收到系统唤醒通知，执行硬件重连与路由健康自愈")
+            self.bleBridge.wakeRecover()
+            self.hidBridge.wakeRecover()
+            self.keyboardMonitor.start()
+            self.viewModel.refreshPermissions()
+            MicRouteCoordinator.recoverIfNeeded(
+                driverAvailable: self.viewModel.driverInstalled,
+                policy: self.viewModel.micPolicy,
+                method: self.viewModel.voiceInputMethod
+            )
+        }
     }
 
     private func setupFrontmostAppObserver() {
@@ -287,15 +318,23 @@ final class AppController: NSObject, NSApplicationDelegate {
         ) { [weak self] note in
             guard let self, self.mappingStore.autoSwitchByApp else { return }
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            guard let targetPreset = RemoteMappingPreset.recommendedPreset(
-                forBundleID: app.bundleIdentifier,
-                customCodingBundleIDs: self.mappingStore.customCodingBundleIDSet
-            ) else { return }
-            if self.mappingStore.activePreset != targetPreset {
-                self.mappingStore.applyPreset(targetPreset)
-                AppLog.write("MAPPING", "随前台应用 \(app.localizedName ?? app.bundleIdentifier ?? "") 自动切至 \(targetPreset.title)")
-            }
             self.viewModel.autoSwitchedAppName = app.localizedName
+
+            // 0.2 秒延时防抖：连续按 ⌘⇥ 快速划过应用时不频繁触发 JSON 序列化与 UserDefaults 磁盘写入
+            self.autoSwitchDebounceWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.mappingStore.autoSwitchByApp else { return }
+                guard let targetPreset = RemoteMappingPreset.recommendedPreset(
+                    forBundleID: app.bundleIdentifier,
+                    customCodingBundleIDs: self.mappingStore.customCodingBundleIDSet
+                ) else { return }
+                if self.mappingStore.activePreset != targetPreset {
+                    self.mappingStore.applyPreset(targetPreset)
+                    AppLog.write("MAPPING", "随前台应用 \(app.localizedName ?? app.bundleIdentifier ?? "") 自动切至 \(targetPreset.title)")
+                }
+            }
+            self.autoSwitchDebounceWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
         }
     }
 

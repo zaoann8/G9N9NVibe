@@ -498,11 +498,27 @@ final class AudioPipe: NSObject {
                 return
             }
 
-            // 跟随当前系统物理麦，严格排除自身虚拟驱动
-            if let defaultID = MicRouteCoordinator.defaultInputDeviceID(),
-               let uid = MicRouteCoordinator.deviceUID(for: defaultID),
-               uid != AppStorage.virtualDriverDeviceUID {
-                var cfUID: CFString = uid as CFString
+            // 严选真实物理麦设备：绝不能绑定自身虚拟驱动，即使系统默认设备被临时切到了虚拟声卡
+            let physicalUID: String? = {
+                if let defaultID = MicRouteCoordinator.defaultInputDeviceID(),
+                   let uid = MicRouteCoordinator.deviceUID(for: defaultID),
+                   uid != AppStorage.virtualDriverDeviceUID {
+                    return uid
+                }
+                if let savedUID = AppStorage.savedOriginalInputDeviceUID,
+                   savedUID != AppStorage.virtualDriverDeviceUID,
+                   MicRouteCoordinator.deviceID(withUID: savedUID) != nil {
+                    return savedUID
+                }
+                if let fallbackID = MicRouteCoordinator.firstPhysicalInputDeviceID(),
+                   let uid = MicRouteCoordinator.deviceUID(for: fallbackID) {
+                    return uid
+                }
+                return nil
+            }()
+
+            if let physicalUID {
+                var cfUID: CFString = physicalUID as CFString
                 _ = withUnsafePointer(to: &cfUID) { ptr in
                     AudioQueueSetProperty(queue, kAudioQueueProperty_CurrentDevice, ptr, UInt32(MemoryLayout<CFString>.size))
                 }

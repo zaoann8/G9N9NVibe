@@ -280,10 +280,32 @@ extension BLEBridge: CBCentralManagerDelegate {
             if isStarted { tryDirectConnect() }
         default:
             if isStreaming { finishAudioStreamLocally(reason: 0xFC) }
+            stopConnectedPoll()
+            stopKeepAliveTimer()
+            connectTimeout?.cancel()
+            connectTimeout = nil
+            if let peripheral {
+                central.cancelPeripheralConnection(peripheral)
+            }
+            peripheral = nil
+            audioChar = nil
+            commandChar = nil
+            controlChar = nil
             batteryChar = nil
             atvvCharsComplete = false
             onBatteryLevelChanged?(nil)
             onConnectionChanged?(false)
+        }
+    }
+
+    /// 系统休眠唤醒（Wake）或从睡眠恢复时的重连入口
+    func wakeRecover() {
+        guard isStarted else { return }
+        AppLog.write("CAST-BLE", "系统唤醒，主动检查并尝试重连 G9N9N 遥控器")
+        if central.state == .poweredOn {
+            if peripheral == nil || !isConnected {
+                tryDirectConnect()
+            }
         }
     }
 

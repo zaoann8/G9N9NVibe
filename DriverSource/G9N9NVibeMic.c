@@ -7,6 +7,7 @@
 #include <CoreAudio/AudioServerPlugIn.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach_time.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -846,7 +847,7 @@ static OSStatus Driver_DoIOOperation(AudioServerPlugInDriverRef inDriver, AudioO
         // 主程序写入混合/选通后的立体声 PCM 到环形缓冲区（限制单次帧数不超过环形容量，杜绝极端客户端越界）
         uint32_t frames = (inIOBufferFrameSize > kRingBufferFrames) ? kRingBufferFrames : inIOBufferFrameSize;
         Float64 rawSampleTime = inIOCycleInfo->mOutputTime.mSampleTime;
-        uint64_t startFrame = (rawSampleTime >= 0.0) ? (uint64_t)rawSampleTime : 0;
+        uint64_t startFrame = (isfinite(rawSampleTime) && rawSampleTime >= 0.0) ? (uint64_t)rawSampleTime : 0;
         uint32_t offset = (uint32_t)(startFrame & kRingBufferMask);
         uint32_t firstPart = kRingBufferFrames - offset;
         if (firstPart > frames) firstPart = frames;
@@ -872,7 +873,7 @@ static OSStatus Driver_DoIOOperation(AudioServerPlugInDriverRef inDriver, AudioO
 
         uint32_t frames = (inIOBufferFrameSize > kRingBufferFrames) ? kRingBufferFrames : inIOBufferFrameSize;
         Float64 rawSampleTime = inIOCycleInfo->mInputTime.mSampleTime;
-        uint64_t startFrame = (rawSampleTime >= 0.0) ? (uint64_t)rawSampleTime : 0;
+        uint64_t startFrame = (isfinite(rawSampleTime) && rawSampleTime >= 0.0) ? (uint64_t)rawSampleTime : 0;
         uint32_t offset = (uint32_t)(startFrame & kRingBufferMask);
         uint32_t firstPart = kRingBufferFrames - offset;
         if (firstPart > frames) firstPart = frames;

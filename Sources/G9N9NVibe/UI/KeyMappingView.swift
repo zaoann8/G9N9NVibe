@@ -163,7 +163,7 @@ struct KeyMappingView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Text(vm.t("点击左侧键帽与右侧清单高亮联动", "Click keys to highlight with list"))
+            Text(vm.t("鼠标悬停或点击键帽与右侧清单高亮联动", "Hover or click keys to highlight with list"))
                 .font(VibeFont.caption(11))
                 .foregroundColor(palette.ink3)
         }
@@ -323,6 +323,11 @@ struct KeyMappingView: View {
         .background(RoundedRectangle(cornerRadius: 9).fill(isSelected ? palette.brandSoft : Color.clear))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(isSelected ? palette.brandBorder : Color.clear, lineWidth: 1))
         .contentShape(Rectangle())
+        .onHover { isHover in
+            if isHover {
+                vm.selectedButtonID = button.id
+            }
+        }
         .onTapGesture {
             vm.selectedButtonID = button.id
         }

@@ -192,6 +192,10 @@ struct G9N9NVectorView: View {
             )
             .frame(width: 7 * scale, height: (yBot - yTop) * scale)
             .offset(x: 155 * scale, y: yTop * scale)
+            .contentShape(Rectangle())
+            .onHover { isHover in
+                if isHover { onSelectKey(id) }
+            }
             .onTapGesture { onSelectKey(id) }
     }
 
@@ -232,6 +236,10 @@ struct G9N9NVectorView: View {
                 )
                 .overlay(Circle().stroke(okSelected ? palette.brand : Color(white: 0.46), lineWidth: 1 * scale))
                 .frame(width: innerR * 2, height: innerR * 2)
+                .contentShape(Circle())
+                .onHover { isHover in
+                    if isHover { onSelectKey("07") }
+                }
                 .onTapGesture { onSelectKey("07") }
         }
         .position(x: cx, y: cy)
@@ -244,6 +252,9 @@ struct G9N9NVectorView: View {
             .fill(selected ? palette.brand.opacity(0.32) : Color.clear)
             .contentShape(AnnularSectorShape(startAngle: .degrees(startDeg), endAngle: .degrees(endDeg), innerRadius: innerR, outerRadius: outerR))
             .frame(width: outerR * 2, height: outerR * 2)
+            .onHover { isHover in
+                if isHover { onSelectKey(id) }
+            }
             .onTapGesture { onSelectKey(id) }
     }
 
@@ -271,6 +282,10 @@ struct G9N9NVectorView: View {
             glyph(selected)
         }
         .position(x: cx * scale, y: cy * scale)
+        .contentShape(Circle())
+        .onHover { isHover in
+            if isHover { onSelectKey(id) }
+        }
         .onTapGesture { onSelectKey(id) }
     }
 
@@ -291,6 +306,10 @@ struct G9N9NVectorView: View {
             .frame(width: 20.5 * scale, height: 16 * scale)
         }
         .position(x: cx * scale, y: cy * scale)
+        .contentShape(Circle())
+        .onHover { isHover in
+            if isHover { onSelectKey("voice") }
+        }
         .onTapGesture { onSelectKey("voice") }
     }
 }

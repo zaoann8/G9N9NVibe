@@ -1045,8 +1045,8 @@
 
             <div class="inspector-hint">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              <span class="zh">按键功能与电量自动动态演示 · 可随时点击任意键帽交互</span>
-              <span class="en">Keys and battery auto-cycling · Click any key to preview</span>
+              <span class="zh">鼠标滑到哪里就展示哪个按键 · 页面绝对静止不上下滑动</span>
+              <span class="en">Hover or click any key to preview instantly · No jumping or scrolling</span>
             </div>
           </div>
         </div>
@@ -1625,15 +1625,28 @@
     }
 
     document.querySelectorAll(".r-key, .r-sector").forEach(el => {
-      el.addEventListener("click", () => {
+      const selectKeyFromElement = (triggerPulse = false) => {
         const key = el.getAttribute("data-key");
+        if (!key) return;
         const idx = demoKeySequence.indexOf(key);
         if (idx !== -1) keySeqIdx = idx;
         renderPreview(key);
-        pulseLED();
+        if (triggerPulse) pulseLED();
         animateMeter(key === "voice");
+      };
 
-        // 用户点击后暂停自动轮播，5 秒后若无新操作则平滑恢复
+      // 鼠标滑到哪里就展示哪个按键（实时跟手，绝不上下滑动页面）
+      el.addEventListener("mouseenter", () => {
+        const key = el.getAttribute("data-key");
+        if (key && key !== activeKey) {
+          selectKeyFromElement(false);
+        }
+        userInteracting = true;
+      });
+
+      // 点击同样激活并脉冲高亮状态灯
+      el.addEventListener("click", () => {
+        selectKeyFromElement(true);
         userInteracting = true;
         clearTimeout(resumeTimeout);
         resumeTimeout = setTimeout(() => {
@@ -1648,7 +1661,9 @@
       consoleBody.addEventListener("mouseenter", () => { userInteracting = true; });
       consoleBody.addEventListener("mouseleave", () => {
         clearTimeout(resumeTimeout);
-        userInteracting = false;
+        resumeTimeout = setTimeout(() => {
+          userInteracting = false;
+        }, 4000);
       });
     }
 

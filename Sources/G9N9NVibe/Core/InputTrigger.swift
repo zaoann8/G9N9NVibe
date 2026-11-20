@@ -242,16 +242,18 @@ enum InputTrigger {
 
     private static var heldShortcut: VoiceTriggerShortcut?
 
-    /// 启动语音识别：长按模式持续按下，短按模式发送一次 60ms 点击
+    /// 启动语音识别：长按模式持续按下，短按模式发送一次 60ms 点击（前置 25ms 广播生效窗口确保输入法秒级识别到虚拟声卡）
     static func beginRecognition() {
         let shortcut = AppStorage.voiceTriggerShortcut
-        switch AppStorage.inputTriggerMode {
-        case .toggle:
-            tap(shortcut)
-        case .hold:
-            guard heldShortcut == nil else { return }
-            heldShortcut = shortcut
-            post(shortcut: shortcut, isDown: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.025) {
+            switch AppStorage.inputTriggerMode {
+            case .toggle:
+                tap(shortcut)
+            case .hold:
+                guard heldShortcut == nil else { return }
+                heldShortcut = shortcut
+                post(shortcut: shortcut, isDown: true)
+            }
         }
     }
 

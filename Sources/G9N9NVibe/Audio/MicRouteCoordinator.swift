@@ -18,9 +18,10 @@ enum MicRouteCoordinator {
         restoreOriginalInputDevice(force: false)
     }
 
-    /// 仅在真正需要经虚拟声卡向跟随系统默认麦的输入法送音时，临时切入虚拟声卡（会话结束立刻归还）
+    /// 仅在真正需要经虚拟声卡向第三方输入法送音时，临时切入虚拟声卡（会话结束立刻无损还原）
     static func beginTransientVirtualRoute(driverAvailable: Bool, policy: MicRoutingPolicy, method: VoiceInputMethod, source: SessionTriggerSource) {
-        guard driverAvailable, policy.requiresDriver, method.followsSystemDefaultInput else { return }
+        _ = method // 全面兼容：豆包、微信输入法及系统听写无感知通用，只要遥控器开麦均临时选通至虚拟声卡，结束立刻无损还原物理麦
+        guard driverAvailable, policy.requiresDriver else { return }
         let usesRemoteAudio = (policy == .remoteOnly || policy == .dualMix || (policy == .smartByTriggerSource && source == .remote))
         guard usesRemoteAudio else { return }
         routeToVirtualMic()
